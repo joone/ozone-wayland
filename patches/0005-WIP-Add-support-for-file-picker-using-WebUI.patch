@@ -1,0 +1,310 @@
+From ed7ced995c298f026c17c27a128e90cd0be89adb Mon Sep 17 00:00:00 2001
+From: Joone Hur <joone.hur@intel.com>
+Date: Fri, 11 Apr 2014 17:25:59 -0700
+Subject: [PATCH 5/5] [WIP] Add support for file-picker using WebUI
+
+WebUI is used to create a file-picker dialog.
+---
+ chrome/app/generated_resources.grd                 |    8 +++
+ chrome/browser/browser_resources.grd               |    4 ++
+ .../browser/download/save_package_file_picker.cc   |    2 +-
+ .../browser/resources/file_picker/file_picker.css  |   72 ++++++++++++++++++++
+ .../browser/resources/file_picker/file_picker.html |   36 ++++++++++
+ .../browser/resources/file_picker/file_picker.js   |    4 ++
+ .../aura/chrome_browser_main_extra_parts_aura.cc   |    7 ++
+ .../ui/webui/chrome_web_ui_controller_factory.cc   |    3 +
+ chrome/common/url_constants.cc                     |    3 +
+ chrome/common/url_constants.h                      |    2 +
+ ui/shell_dialogs/select_file_dialog.cc             |    2 +-
+ 11 files changed, 141 insertions(+), 2 deletions(-)
+ create mode 100644 chrome/browser/resources/file_picker/file_picker.css
+ create mode 100644 chrome/browser/resources/file_picker/file_picker.html
+ create mode 100644 chrome/browser/resources/file_picker/file_picker.js
+
+diff --git a/chrome/app/generated_resources.grd b/chrome/app/generated_resources.grd
+index c027c5e..a5d6c2a 100644
+--- a/chrome/app/generated_resources.grd
++++ b/chrome/app/generated_resources.grd
+@@ -14861,6 +14861,14 @@ Do you accept?
+     <message name="IDS_FLAGS_ENABLE_INSTANT_SEARCH_CLICKS_DESCRIPTION" desc="Description to enable instant search clicks">
+       If enabled, prefetch previews for search results and swap them with original page when is downloaded and rendered.
+     </message>
++
++    <!-- File-picker strings -->
++    <message name="IDS_FILE_PICKER_TITLE" desc="File picker title">
++      Save file as
++    </message>
++    <message name="IDS_FILE_PICKER_FILE_NAME" desc="File Name">
++      File name
++    </message>
+   </messages>
+   </release>
+ </grit>
+diff --git a/chrome/browser/browser_resources.grd b/chrome/browser/browser_resources.grd
+index 9109e40..524d46d 100644
+--- a/chrome/browser/browser_resources.grd
++++ b/chrome/browser/browser_resources.grd
+@@ -416,6 +416,10 @@
+       <include name="IDR_GCM_INTERNALS_HTML" file="resources\gcm_internals.html" type="BINDATA" />
+       <include name="IDR_GCM_INTERNALS_CSS" file="resources\gcm_internals.css" type="BINDATA" />
+       <include name="IDR_GCM_INTERNALS_JS" file="resources\gcm_internals.js" type="BINDATA" />
++
++      <include name="IDR_FILE_PICKER_HTML" file="resources\file_picker\file_picker.html" type="BINDATA" />
++      <include name="IDR_FILE_PICKER_JS" file="resources\file_picker\file_picker.js" type="BINDATA" />
++      <include name="IDR_FILE_PICKER_CSS" file="resources\file_picker\file_picker.css" type="BINDATA" />
+     </includes>
+   </release>
+ </grit>
+diff --git a/chrome/browser/download/save_package_file_picker.cc b/chrome/browser/download/save_package_file_picker.cc
+index da18db3..f1693fb 100644
+--- a/chrome/browser/download/save_package_file_picker.cc
++++ b/chrome/browser/download/save_package_file_picker.cc
+@@ -212,7 +212,7 @@ SavePackageFilePicker::SavePackageFilePicker(
+         file_type_index,
+         default_extension_copy,
+         platform_util::GetTopLevel(web_contents->GetView()->GetNativeView()),
+-        NULL);
++        web_contents);
+   } else {
+     // Just use 'suggested_path_copy' instead of opening the dialog prompt.
+     // Go through FileSelected() for consistency.
+diff --git a/chrome/browser/resources/file_picker/file_picker.css b/chrome/browser/resources/file_picker/file_picker.css
+new file mode 100644
+index 0000000..a675d89
+--- /dev/null
++++ b/chrome/browser/resources/file_picker/file_picker.css
+@@ -0,0 +1,72 @@
++/*
++ * Copyright 2014 The Chromium Authors. All rights reserved.
++ * Use of this source code is governed by a BSD-style license that can be
++ * found in the LICENSE file.
++ */
++
++#main-table {
++  border-collapse: collapse;
++  border-width: 0;
++  margin-left: auto;
++  margin-right: auto;
++  table-layout: fixed;
++  width: 1000px;
++}
++
++tr.section-row {
++  border-bottom-width: 2px;
++  border-color: #000;
++  border-left-width: 0;
++  border-right-width: 0;
++  border-style: solid;
++  border-top-width: 2px;
++  width: 100%;
++}
++
++td.title-cell {
++  border-width: 0;
++  text-align: right;
++  vertical-align: top;
++  width: 15%;
++}
++
++p.title-text {
++  font-weight: bold;
++  margin-right: 10px;
++}
++
++td.show-button-cell {
++  border-bottom-width: 0;
++  border-color: #aaa;
++  border-left-width: 1px;
++  border-right-width: 1px;
++  border-style: solid;
++  border-top-width: 0;
++  text-align: center;
++  vertical-align: top;
++  width: 10%;
++}
++
++td.plots-cell {
++  border-width: 0;
++  padding: 10px;
++  text-align: left;
++  width: 75%;
++}
++
++div.section-div {
++  width: 100%;
++}
++
++div.plots-div {
++  width: 100%;
++}
++
++button.show-button {
++  margin: 10px;
++}
++
++button.reload-button {
++  margin-bottom: 10px;
++  margin-top: 10px;
++}
+diff --git a/chrome/browser/resources/file_picker/file_picker.html b/chrome/browser/resources/file_picker/file_picker.html
+new file mode 100644
+index 0000000..d43673b
+--- /dev/null
++++ b/chrome/browser/resources/file_picker/file_picker.html
+@@ -0,0 +1,36 @@
++<!DOCTYPE HTML>
++<html i18n-values="dir:textdirection">
++<head>
++  <meta charset="utf-8">
++  <title i18n-content="dialogTitle"></title>
++  <script src="chrome://resources/js/cr.js"></script>
++  <script src="chrome://resources/js/load_time_data.js"></script>
++  <script src="chrome://resources/js/util.js"></script>
++  <script src="strings.js"></script>
++  <script src="file_picker/file_picker.js"></script>
++  <link rel="stylesheet" href="file_picker/file_picker.css">
++</head>
++<body i18n-values=".style.fontFamily:fontfamily;.style.fontSize:fontsize">
++
++<p> This is an example of File-picker UI</p>
++<table>
++<tr>
++<td><div id="file-picker-file-name" i18n-content="filePickerFileNameLabel"></div>
++</td>
++<td>
++<input type="text" name="FileName">
++</td>
++</tr>
++<tr>
++<td>
++  <div id="button-row">
++    <button id="save-button" i18n-content="saveFileButtonText"></button>
++    <button id="cancel-button" i18n-content="cancelButtonText"></button>
++  </div>
++</td>
++</tr>
++</table>
++  <!-- Must be last in the DOM: processes elements and inserts i18n strings -->
++  <script src="chrome://resources/js/i18n_template2.js"></script>
++</body>
++</html>
+diff --git a/chrome/browser/resources/file_picker/file_picker.js b/chrome/browser/resources/file_picker/file_picker.js
+new file mode 100644
+index 0000000..1513ac0
+--- /dev/null
++++ b/chrome/browser/resources/file_picker/file_picker.js
+@@ -0,0 +1,4 @@
++// Copyright 2014 The Chromium Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
+diff --git a/chrome/browser/ui/aura/chrome_browser_main_extra_parts_aura.cc b/chrome/browser/ui/aura/chrome_browser_main_extra_parts_aura.cc
+index dba4955..2df0798 100644
+--- a/chrome/browser/ui/aura/chrome_browser_main_extra_parts_aura.cc
++++ b/chrome/browser/ui/aura/chrome_browser_main_extra_parts_aura.cc
+@@ -20,6 +20,7 @@
+ 
+ #if defined(OS_LINUX)
+ #include "chrome/browser/ui/libgtk2ui/gtk2_ui.h"
++#include "ozone/ui/webui/ozone_webui.h"
+ #include "ui/views/linux_ui/linux_ui.h"
+ #else
+ #endif
+@@ -65,6 +66,12 @@ void ChromeBrowserMainExtraPartsAura::PreEarlyInitialization() {
+   // TODO(erg): Refactor this into a dlopen call when we add a GTK3 port.
+   views::LinuxUI::SetInstance(BuildGtk2UI());
+ #endif
++
++#if !defined(USE_ASH) && defined(OS_LINUX) && defined(USE_OZONE)
++  fprintf(stdout, "ChromeBrowserMainExtraPartsAura::%s\n", __func__);
++  views::LinuxUI::SetInstance(BuildWebUI());
++#endif
++
+ }
+ 
+ void ChromeBrowserMainExtraPartsAura::ToolkitInitialized() {
+diff --git a/chrome/browser/ui/webui/chrome_web_ui_controller_factory.cc b/chrome/browser/ui/webui/chrome_web_ui_controller_factory.cc
+index abf539f..dead680 100644
+--- a/chrome/browser/ui/webui/chrome_web_ui_controller_factory.cc
++++ b/chrome/browser/ui/webui/chrome_web_ui_controller_factory.cc
+@@ -70,6 +70,7 @@
+ #include "content/public/common/url_utils.h"
+ #include "extensions/common/constants.h"
+ #include "extensions/common/feature_switch.h"
++#include "ozone/ui/webui/file_picker_ui.h"
+ #include "ui/gfx/favicon_size.h"
+ #include "ui/web_dialogs/web_dialog_ui.h"
+ #include "url/gurl.h"
+@@ -259,6 +260,8 @@ WebUIFactoryFunction GetWebUIFactoryFunction(WebUI* web_ui,
+ #endif
+   if (url.host() == chrome::kChromeUIFlagsHost)
+     return &NewWebUI<FlagsUI>;
++  if (url.host() == chrome::kChromeUIFilePickerHost)
++      return &NewWebUI<ui::FilePickerUI>;
+   if (url.host() == chrome::kChromeUIHistoryFrameHost)
+     return &NewWebUI<HistoryUI>;
+   if (url.host() == chrome::kChromeUIInstantHost)
+diff --git a/chrome/common/url_constants.cc b/chrome/common/url_constants.cc
+index 6f8a339..f51859b 100644
+--- a/chrome/common/url_constants.cc
++++ b/chrome/common/url_constants.cc
+@@ -45,6 +45,7 @@ const char kChromeUIExtensionsFrameURL[] = "chrome://extensions-frame/";
+ const char kChromeUIExtensionsURL[] = "chrome://extensions/";
+ const char kChromeUIFaviconURL[] = "chrome://favicon/";
+ const char kChromeUIFeedbackURL[] = "chrome://feedback/";
++const char kChromeUIFilePickerURL[] = "chrome://file-picker/";
+ const char kChromeUIFlagsURL[] = "chrome://flags/";
+ const char kChromeUIFlashURL[] = "chrome://flash/";
+ const char kChromeUIGCMInternalsURL[] = "chrome://gcm-internals/";
+@@ -178,6 +179,7 @@ const char kChromeUIExtensionsFrameHost[] = "extensions-frame";
+ const char kChromeUIExtensionsHost[] = "extensions";
+ const char kChromeUIFaviconHost[] = "favicon";
+ const char kChromeUIFeedbackHost[] = "feedback";
++const char kChromeUIFilePickerHost[] = "file-picker";
+ const char kChromeUIFlagsHost[] = "flags";
+ const char kChromeUIFlashHost[] = "flash";
+ const char kChromeUIGCMInternalsHost[] = "gcm-internals";
+@@ -570,6 +572,7 @@ const char* const kChromeHostURLs[] = {
+   kChromeUIDevicesHost,
+ #endif
+   kChromeUIDNSHost,
++  kChromeUIFilePickerHost,
+   kChromeUIFlagsHost,
+   kChromeUIGCMInternalsHost,
+   kChromeUIHelpHost,
+diff --git a/chrome/common/url_constants.h b/chrome/common/url_constants.h
+index f12ea11..30a4b2b 100644
+--- a/chrome/common/url_constants.h
++++ b/chrome/common/url_constants.h
+@@ -41,6 +41,7 @@ extern const char kChromeUIExtensionsFrameURL[];
+ extern const char kChromeUIExtensionsURL[];
+ extern const char kChromeUIFaviconURL[];
+ extern const char kChromeUIFeedbackURL[];
++extern const char kChromeUIFilePickerURL[];
+ extern const char kChromeUIFlagsURL[];
+ extern const char kChromeUIFlashURL[];
+ extern const char kChromeUIGCMInternalsURL[];
+@@ -170,6 +171,7 @@ extern const char kChromeUIExtensionsFrameHost[];
+ extern const char kChromeUIExtensionsHost[];
+ extern const char kChromeUIFaviconHost[];
+ extern const char kChromeUIFeedbackHost[];
++extern const char kChromeUIFilePickerHost[];
+ extern const char kChromeUIFlagsHost[];
+ extern const char kChromeUIFlashHost[];
+ extern const char kChromeUIGCMInternalsHost[];
+diff --git a/ui/shell_dialogs/select_file_dialog.cc b/ui/shell_dialogs/select_file_dialog.cc
+index 7897bca..bbd03b9 100644
+--- a/ui/shell_dialogs/select_file_dialog.cc
++++ b/ui/shell_dialogs/select_file_dialog.cc
+@@ -110,7 +110,7 @@ void SelectFileDialog::SelectFile(
+     gfx::NativeWindow owning_window,
+     void* params) {
+   DCHECK(listener_);
+-
++  fprintf(stdout, "SelectFileDialog::%s\n", __func__);
+   if (select_file_policy_.get() &&
+       !select_file_policy_->CanOpenSelectFileDialog()) {
+     select_file_policy_->SelectFileDenied();
+-- 
+1.7.9.5
+

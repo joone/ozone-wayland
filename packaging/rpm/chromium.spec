@@ -50,19 +50,19 @@ BuildRequires:  pkgconfig(vconf)
 BuildRequires:  pkgconfig(wayland-client)
 BuildRequires:  pkgconfig(wayland-cursor)
 BuildRequires:  pkgconfig(wayland-egl)
-BuildRequires:  pkgconfig(x11)
-BuildRequires:  pkgconfig(xcomposite)
-BuildRequires:  pkgconfig(xcursor)
-BuildRequires:  pkgconfig(xdamage)
-BuildRequires:  pkgconfig(xext)
-BuildRequires:  pkgconfig(xfixes)
-BuildRequires:  pkgconfig(xi)
+#BuildRequires:  pkgconfig(x11)
+#BuildRequires:  pkgconfig(xcomposite)
+#BuildRequires:  pkgconfig(xcursor)
+#BuildRequires:  pkgconfig(xdamage)
+#BuildRequires:  pkgconfig(xext)
+#BuildRequires:  pkgconfig(xfixes)
+#BuildRequires:  pkgconfig(xi)
 BuildRequires:  pkgconfig(xkbcommon)
-BuildRequires:  pkgconfig(xrandr)
-BuildRequires:  pkgconfig(xrender)
-BuildRequires:  pkgconfig(xscrnsaver)
-BuildRequires:  pkgconfig(xt)
-BuildRequires:  pkgconfig(xtst)
+#BuildRequires:  pkgconfig(xrandr)
+#BuildRequires:  pkgconfig(xrender)
+#BuildRequires:  pkgconfig(xscrnsaver)
+#BuildRequires:  pkgconfig(xt)
+#BuildRequires:  pkgconfig(xtst)
 
 %description
 # Ozone is a set of classes in Chromium for abstracting different window systems on Linux. It provides abstraction for the construction of accelerated surfaces underlying Aura UI framework, input devices assignment, and event handling.
@@ -148,9 +148,11 @@ export GYP_GENERATORS=ninja
 -Dtracing_like_official_build=1 \
 -Drelease_unwind_tables=0 \
 -Dlinux_dump_symbols=0 \
--Denable_ozone_wayland_vkb=1
+-Denable_ozone_wayland_vkb=1 \
+-Dremove_webcore_debug_symbols=1
+#-Denable_file_manager=1 \
 
-ninja %{?_smp_mflags} -C out/Release chrome
+ninja %{?_smp_mflags} -C out/Debug chrome
 
 %install
 # Support building in a non-standard directory, possibly outside %{_builddir}.

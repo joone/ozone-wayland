@@ -7,5 +7,6 @@
     'events/event.gypi',
     'gfx/gfx.gypi',
     'ime/ime.gypi',
+    'webui/webui.gypi',
    ],
 }
