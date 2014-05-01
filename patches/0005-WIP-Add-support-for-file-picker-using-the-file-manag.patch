@@ -1,0 +1,1881 @@
+From 8cf55d758f4c6985f7000c661f746a1717a03f32 Mon Sep 17 00:00:00 2001
+From: Joone Hur <joone.hur@intel.com>
+Date: Fri, 11 Apr 2014 17:25:59 -0700
+Subject: [PATCH 5/5] [WIP] Add support for file-picker using the file manager
+ of ChromiumOS.
+
+The file manager of ChromeOS is moved to chrome/browser/file_manager.
+As a result, the file-picker UI is shown, but it is not drawn completely.
+
+We need to add more ChromeOS features like the volume manager, video manager,
+disk mount manager, mounted disk monitor, and zip file creator, but
+these features are dependent on other ChromeOS features.
+---
+ chrome/app/generated_resources.grd                 |  820 ++++++++++++++++++++
+ chrome/browser/browser_resources.grd               |    5 +-
+ chrome/browser/extensions/component_loader.cc      |    5 +-
+ .../extensions/extension_view_host_factory.cc      |    7 +-
+ chrome/browser/file_manager/app_id.h               |   21 +
+ chrome/browser/file_manager/fileapi_util.cc        |  328 ++++++++
+ chrome/browser/file_manager/fileapi_util.h         |  128 +++
+ .../file_manager/select_file_dialog_util.cc        |   54 ++
+ .../browser/file_manager/select_file_dialog_util.h |   21 +
+ chrome/browser/file_manager/url_util.cc            |  130 ++++
+ chrome/browser/file_manager/url_util.h             |   41 +
+ .../resources/component_extension_resources.grd    |    4 +-
+ .../aura/chrome_browser_main_extra_parts_aura.cc   |    6 +-
+ .../ui/views/extensions/extension_dialog.cc        |    5 +-
+ .../ui/views/select_file_dialog_extension.cc       |   15 +-
+ .../views/select_file_dialog_extension_factory.cc  |    2 +
+ chrome/chrome_browser_ui.gypi                      |   11 +-
+ ui/shell_dialogs/select_file_dialog.cc             |    2 +-
+ 18 files changed, 1587 insertions(+), 18 deletions(-)
+ create mode 100644 chrome/browser/file_manager/app_id.h
+ create mode 100644 chrome/browser/file_manager/fileapi_util.cc
+ create mode 100644 chrome/browser/file_manager/fileapi_util.h
+ create mode 100644 chrome/browser/file_manager/select_file_dialog_util.cc
+ create mode 100644 chrome/browser/file_manager/select_file_dialog_util.h
+ create mode 100644 chrome/browser/file_manager/url_util.cc
+ create mode 100644 chrome/browser/file_manager/url_util.h
+
+diff --git a/chrome/app/generated_resources.grd b/chrome/app/generated_resources.grd
+index f4a63ab..ed7c940 100644
+--- a/chrome/app/generated_resources.grd
++++ b/chrome/app/generated_resources.grd
+@@ -14847,6 +14847,826 @@ Do you accept?
+     <message name="IDS_FLAGS_ENABLE_INSTANT_SEARCH_CLICKS_DESCRIPTION" desc="Description to enable instant search clicks">
+       If enabled, prefetch previews for search results and swap them with original page when is downloaded and rendered.
+     </message>
++
++  <!-- File Manager -->
++  <message name="IDS_FLAGS_FILE_MANAGER_ENABLE_NEW_AUDIO_PLAYER_NAME" desc="Name of the about:flag option to enable the new audio player app.">
++    Enable the new audio player
++  </message>
++  <message name="IDS_FLAGS_FILE_MANAGER_ENABLE_NEW_AUDIO_PLAYER_DESCRIPTION" desc="Description of the about:flag option to the enable new audio player app.">
++    Use the experimental new audio player instead of the stable one.
++  </message>
++  <message name="IDS_FILE_BROWSER_ARCHIVE_DIRECTORY_LABEL" desc="/archive directory label.">
++    Archives
++  </message>
++  <message name="IDS_FILE_BROWSER_REMOVABLE_DIRECTORY_LABEL" desc="/removable directory label.">
++    External Storage
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_DIRECTORY_LABEL" desc="/drive directory label.">
++    Google Drive
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_MY_DRIVE_LABEL" desc="A label for the 'My Drive' collection of Google Drive.">
++    My Drive
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_SHARED_WITH_ME_COLLECTION_LABEL" desc="A label for the 'shared with me' collection of Google Drive.">
++    Shared with me
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_RECENT_COLLECTION_LABEL" desc="A label for the 'Recent' collection of Google Drive.">
++    Recent
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_OFFLINE_COLLECTION_LABEL" desc="A label for the 'Offline' collection of Google Drive.">
++    Offline
++  </message>
++  <message name="IDS_FILE_BROWSER_DOWNLOADS_DIRECTORY_LABEL" desc="Downloads local directory label.">
++    Downloads
++  </message>
++  <message name="IDS_FILE_BROWSER_DOWNLOADS_DIRECTORY_WARNING" desc="Warning displayed to user when viewing downloads folder.">
++    <ph name="BEGIN_BOLD">&lt;strong&gt;</ph>Caution:<ph name="END_BOLD">&lt;/strong&gt;</ph>  These files are temporary and may be automatically deleted to free up disk space.  <ph name="BEGIN_LINK">&lt;a href="javascript://"&gt;</ph>Learn More<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph>
++  </message>
++  <message name="IDS_FILE_BROWSER_NAME_COLUMN_LABEL" desc="Name column label.">
++    Name
++  </message>
++  <message name="IDS_FILE_BROWSER_SIZE_COLUMN_LABEL" desc="Size column label.">
++    Size
++  </message>
++
++  <message name="IDS_FILE_BROWSER_SIZE_BYTES" desc="Size in bytes.">
++    $1 bytes
++  </message>
++  <message name="IDS_FILE_BROWSER_SIZE_KB" desc="Size in kilo bytes.">
++    $1 KB
++  </message>
++  <message name="IDS_FILE_BROWSER_SIZE_MB" desc="Size in mega bytes.">
++    $1 MB
++  </message>
++  <message name="IDS_FILE_BROWSER_SIZE_GB" desc="Size in giga bytes.">
++    $1 GB
++  </message>
++  <message name="IDS_FILE_BROWSER_SIZE_TB" desc="Size in tera bytes.">
++    $1 TB
++  </message>
++  <message name="IDS_FILE_BROWSER_SIZE_PB" desc="Size in peta bytes.">
++    $1 PB
++  </message>
++
++  <message name="IDS_FILE_BROWSER_SHORTCUT_CTRL" desc="[Ctrl] key name to use in shortcuts descriptions. Shouldn't be translated in many languages actually.">
++    Ctrl
++  </message>
++  <message name="IDS_FILE_BROWSER_SHORTCUT_ALT" desc="[Alt] key name to use in shortcuts descriptions. Shouldn't be translated in many languages actually.">
++    Alt
++  </message>
++  <message name="IDS_FILE_BROWSER_SHORTCUT_SHIFT" desc="[Shift] key name to use in shortcuts descriptions. Shouldn't be translated in many languages actually.">
++    Shift
++  </message>
++  <message name="IDS_FILE_BROWSER_SHORTCUT_META" desc="[Meta] key name to use in shortcuts descriptions. Shouldn't be translated in many languages actually.">
++    Meta
++  </message>
++  <message name="IDS_FILE_BROWSER_SHORTCUT_SPACE" desc="[Space] key name to use in shortcuts descriptions. Shouldn't be translated in many languages actually.">
++    Space
++  </message>
++  <message name="IDS_FILE_BROWSER_SHORTCUT_ENTER" desc="[Enter] key name to use in shortcuts descriptions. Shouldn't be translated in many languages actually.">
++    Enter
++  </message>
++
++  <message name="IDS_FILE_BROWSER_TYPE_COLUMN_LABEL" desc="Type column label.">
++    Type
++  </message>
++  <message name="IDS_FILE_BROWSER_DATE_COLUMN_LABEL" desc="Date column label.">
++    Date modified
++  </message>
++  <message name="IDS_FILE_BROWSER_OFFLINE_COLUMN_LABEL" desc="Available offline column label.">
++    Available offline
++  </message>
++  <message name="IDS_FILE_BROWSER_ERROR_CREATING_FOLDER" desc="Message displayed when we can't create a folder.">
++    Unable to create folder "<ph name="FOLDER_NAME">$1<ex>Documents</ex></ph>". <ph name="ERROR_MESSAGE">$2<ex>An error occurred (code: ABORT)</ex></ph>
++  </message>
++  <message name="IDS_FILE_BROWSER_ERROR_INVALID_CHARACTER" desc="Error message displayed when the user enters an invalid character in a file or directory name.">
++    Invalid character: $1
++  </message>
++  <message name="IDS_FILE_BROWSER_ERROR_RESERVED_NAME" desc="Error message displayed when the user enters a file name which is reserved.">
++    This name may not be used as a file of folder name
++  </message>
++  <message name="IDS_FILE_BROWSER_ERROR_HIDDEN_NAME" desc="Error message displayed when the user tries to rename to or create a file started with dot.">
++    Names starting with dot are reserved for the system. Please choose another name.
++  </message>
++  <message name="IDS_FILE_BROWSER_ERROR_WHITESPACE_NAME" desc="Error message displayed when the user enters a file name consisting of only whitespace characters.">
++    Invalid name
++  </message>
++  <message name="IDS_FILE_BROWSER_ERROR_LONG_NAME" desc="Error message displayed when user trys to enter too long name for a file or a folder.">
++    This name is too long
++  </message>
++  <message name="IDS_FILE_BROWSER_NEW_FOLDER_BUTTON_LABEL" desc="Label on the 'New folder' button.">
++    New folder
++  </message>
++  <message name="IDS_FILE_BROWSER_NEW_WINDOW_BUTTON_LABEL" desc="Label on the 'New window' button.">
++    New window
++  </message>
++  <message name="IDS_FILE_BROWSER_FILENAME_LABEL" desc="Filename text area label.">
++    File name
++  </message>
++  <message name="IDS_FILE_BROWSER_PREPARING_LABEL" desc="Label informing about preparing the file.">
++    Preparing
++  </message>
++  <message name="IDS_FILE_BROWSER_DRAGGING_MULTIPLE_ITEMS" desc="Tooltip message for dragging multiple files.">
++    $1 items
++  </message>
++
++  <message name="IDS_FILE_BROWSER_ARCHIVE_MOUNT_FAILED" desc="Title of the error dialog when file mount operation failed.">
++    Unable to open "$1": $2
++  </message>
++  <message name="IDS_FILE_BROWSER_UNMOUNT_FAILED" desc="Title of the error dialog when device unmount operation failed.">
++   <ph name="BEGIN_BOLD">&lt;b&gt;</ph>Don't remove your device just yet!<ph name="END_BOLD">&lt;/b&gt;</ph>
++   <ph name="LINE_BREAKS">&lt;br/&gt;&lt;br/&gt;</ph>
++   Removing your device while it is in use may cause data loss.  Please wait until the operation is over, then eject the device using the Files app.
++  </message>
++  <message name="IDS_FILE_BROWSER_MOUNT_ARCHIVE" desc="Title of the action for mounting an archive file to work with its contents.">
++    Open
++  </message>
++  <message name="IDS_FILE_BROWSER_FORMAT_DEVICE_BUTTON_LABEL" desc="Title of the action for formatting removable device.">
++    Format device
++  </message>
++  <message name="IDS_FILE_BROWSER_UNMOUNT_DEVICE_BUTTON_LABEL" desc="Title of the action for unmounting removable device.">
++    Eject device
++  </message>
++  <message name="IDS_FILE_BROWSER_CLOSE_ARCHIVE_BUTTON_LABEL" desc="Title of the action for closing the archive.">
++    Close
++  </message>
++  <message name="IDS_FILE_BROWSER_ACTION_VIEW" desc="Title of the action to view (no edit) a file.">
++    View
++  </message>
++  <message name="IDS_FILE_BROWSER_ACTION_OPEN" desc="Title of the action to open (and possibly edit) a file.">
++    Open
++  </message>
++  <message name="IDS_FILE_BROWSER_ACTION_OPEN_GDOC" desc="Title of the action to open a Google Docs document.">
++    Docs
++  </message>
++  <message name="IDS_FILE_BROWSER_ACTION_OPEN_GSHEET" desc="Title of the action to open a Google Spreadsheets document.">
++    Sheets
++  </message>
++  <message name="IDS_FILE_BROWSER_ACTION_OPEN_GSLIDES" desc="Title of the action to open a Google Slides document.">
++    Slides
++  </message>
++  <message name="IDS_FILE_BROWSER_ACTION_WATCH" desc="Title of the action to watch a video.">
++    Watch
++  </message>
++  <message name="IDS_FILE_BROWSER_ACTION_LISTEN" desc="Title of the action to play an audio file.">
++    Listen
++  </message>
++
++  <message name="IDS_FILE_BROWSER_GALLERY_NO_IMAGES" desc="In the Gallery, the message that there are no images in this directory.">
++    No images in this directory.
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_ITEMS_SELECTED" desc="In the Gallery, the message showing the selected item count.">
++    <ph name="COUNT">$1<ex>3</ex></ph> items selected
++  </message>
++
++  <message name="IDS_FILE_BROWSER_GALLERY_MOSAIC" desc="In the Gallery, the title on the button that switches to the mosaic view.">
++    Mosaic view
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_SLIDE" desc="In the Gallery, the title on the button that switches to the slide view.">
++    Slide view
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_SLIDESHOW" desc="In the Gallery, the title on the button that starts the slide show.">
++    Slideshow
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_DELETE" desc="In the Gallery, the title on the button that deletes selected images.">
++    Delete
++  </message>
++
++  <message name="IDS_FILE_BROWSER_GALLERY_EDIT" desc="In the Gallery, the title on the button shows/hides editing buttons.">
++    Edit
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_PRINT" desc="In the Gallery, the title on the button showing the print dialog for the current image or video.">
++    Print
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_SHARE" desc="In the Gallery, the title on the button that lets the user share a photo.">
++    Share
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_ENTER_WHEN_DONE" desc="In the Gallery, the text in a floating panel that prompts the user to press enter when they are done with the changes to a photo.">
++    Press Enter when done
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_AUTOFIX" desc="In the Gallery, the title on the button that applies the Auto-Fix filter to a photo.">
++    Auto-fix
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_FIXED" desc="In the Gallery, the text in a floating panel that notifies that the photo has been automatically fixed.">
++    Fixed
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_CROP" desc="In the Gallery, the title on the button that cuts out a rectangular fragment from a photo">
++    Crop
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_EXPOSURE" desc="In the Gallery, the title on the button that applies the Brightness/Contrast filter to a photo.">
++    Brightness
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_BRIGHTNESS" desc="In the Gallery, the text next to the Brightness slider.">
++    Brightness
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_CONTRAST" desc="In the Gallery, the text next to the Contrast slider.">
++    Contrast
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_ROTATE_LEFT" desc="In the Gallery, the title on the button that rotates the photo 90 degrees to the left (counterclockwise).">
++    Left
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_ROTATE_RIGHT" desc="In the Gallery, the title on the button that rotates the photo 90 degrees to the right (clockwise).">
++    Right
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_UNDO" desc="In the Gallery, the text on the button that reverts the most recent operation.">
++    Undo
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_REDO" desc="In the Gallery, the text on the button that performs again the operation that has been recently reverted.">
++    Redo
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_FILE_EXISTS" desc="In the Gallery, the message informing that file already exists when attempting to rename.">
++    File already exists
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_SAVED" desc="In the Gallery, the message informing that editing saved successfully.">
++    Saved
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_OVERWRITE_ORIGINAL" desc="In the Gallery, text on the button to overwrite original file along with the edited copy.">
++    Overwrite original
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_OVERWRITE_BUBBLE" desc="In the Gallery, text in the bubble informing user about saving and overwriting original file.">
++    Your edits are saved automatically.<ph name="BREAKS">&lt;br&gt;&lt;br&gt;<ex>&lt;br&gt;&lt;br&gt;</ex></ph>To keep a copy of the original image, uncheck "Overwrite original"
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_UNSAVED_CHANGES" desc="In the Gallery, message informing about unsaved changes, when user tries to close the tab.">
++    Changes are not saved yet.
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_READONLY_WARNING" desc="In the Gallery, message informing that directory is readonly, and edited files will be saved to Downloads directory.">
++    Cannot save to $1. Edited images will be saved in the Downloads folder.
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_IMAGE_ERROR" desc="In the Gallery, message informing that the image failed to load.">
++    This file could not be displayed.
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_IMAGE_TOO_BIG_ERROR" desc="In the Gallery, message informing that the image is too big to be displayed.">
++    This file is too large to be opened.
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_VIDEO_ERROR" desc="In the Gallery, message informing that the video could not be played.">
++    This file could not be played.
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_VIDEO_DECODING_ERROR" desc="In the Gallery, message informing that an error occured while playing the movie.">
++    An error occurred. Click to restart from the beginning.
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_VIDEO_LOOPED_MODE" desc="In the Gallery, message informing that the movie will be played in a loop.">
++    This video will keep playing until the cows come home.
++  </message>
++  <message name="IDS_FILE_BROWSER_AUDIO_ERROR" desc="In the Audio Player, message informing that the file could not be played.">
++    This file could not be played.
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_IMAGE_OFFLINE" desc="In the Gallery, message informing that the image could be displayed in the offline mode.">
++    This image is not available offline.
++  </message>
++  <message name="IDS_FILE_BROWSER_GALLERY_VIDEO_OFFLINE" desc="In the Gallery, message informing that the video could not be played in the offline mode.">
++    This video is not available offline.
++  </message>
++  <message name="IDS_FILE_BROWSER_AUDIO_OFFLINE" desc="In the Audio Player, message informing that the audio file could not be played in the offline mode.">
++    This file is not available offline.
++  </message>
++
++  <message name="IDS_FILE_BROWSER_RECOVERED_FILES_FROM_GOOGLE_DRIVE_DIRECTORY_NAME" desc="The name of the direcotry which stores files recovered from Google Drive directory when the locally stored Google Drive data is found to be broken.">
++    Recovered files from Google Drive
++  </message>
++
++  <message name="IDS_FILE_BROWSER_CONFLICT_DIALOG_MESSAGE" desc="Message of the conflict dialog shown when a file transfer operation is conflicted.">
++    A file named "<ph name="FILENAME">$1<ex>photo.jpg</ex></ph>" already exists. What do you want to do?
++  </message>
++  <message name="IDS_FILE_BROWSER_CONFLICT_DIALOG_KEEP_BOTH" desc="Label of a button to keep both entries after the file transfer operation.">
++    Keep both
++  </message>
++  <message name="IDS_FILE_BROWSER_CONFLICT_DIALOG_REPLACE" desc="Label of a button to replace the old entry with the new entry.">
++    Replace
++  </message>
++  <message name="IDS_FILE_BROWSER_CONFLICT_DIALOG_APPLY_TO_ALL" desc="Label of checkbox in the conflict dialog box to apply the user selection to all entries.">
++    Apply to all
++  </message>
++
++  <message name="IDS_FILE_BROWSER_CONFIRM_OVERWRITE_FILE" desc="Asks the user if they are sure they want to overwrite an existing file with another one.">
++    A file named "$1" already exists. Do you want to replace it?
++  </message>
++  <message name="IDS_FILE_BROWSER_FILE_ALREADY_EXISTS" desc="Error message displayed when user tries to create a file with an existing name.">
++    The file named "$1" already exists. Please choose a different name.
++  </message>
++  <message name="IDS_FILE_BROWSER_DIRECTORY_ALREADY_EXISTS" desc="Error message displayed when user tries to create a directory with an existing name.">
++    The folder named "$1" already exists. Please choose a different name.
++  </message>
++  <message name="IDS_FILE_BROWSER_ERROR_RENAMING" desc="Error message.">
++    Unable to rename "<ph name="FILE_NAME">$1<ex>document.pdf</ex></ph>". <ph name="ERROR_MESSAGE">$2<ex>An error occurred (code: ABORT)</ex></ph>
++  </message>
++  <message name="IDS_FILE_BROWSER_RENAME_BUTTON_LABEL" desc="Button Label.">
++    Rename
++  </message>
++  <message name="IDS_FILE_BROWSER_DELETE_BUTTON_LABEL" desc="Button Label.">
++    Delete
++  </message>
++  <message name="IDS_FILE_BROWSER_PASTE_BUTTON_LABEL" desc="Button Label.">
++    Paste
++  </message>
++  <message name="IDS_FILE_BROWSER_COPY_BUTTON_LABEL" desc="Button Label.">
++    Copy
++  </message>
++  <message name="IDS_FILE_BROWSER_CUT_BUTTON_LABEL" desc="Button Label.">
++    Cut
++  </message>
++  <message name="IDS_FILE_BROWSER_OPEN_WITH_BUTTON_LABEL" desc="Menu item label, showing dialog to choose application to open selected files.">
++    Open with...
++  </message>
++  <message name="IDS_FILE_BROWSER_ZIP_SELECTION_BUTTON_LABEL" desc="Menu item label, showing dialog to create zip file for selected files.">
++    Zip selection
++  </message>
++  <message name="IDS_FILE_BROWSER_CREATE_FOLDER_SHORTCUT_BUTTON_LABEL" desc="Menu item label, creating a shortcut of the selected folder to the left nav.">
++    Create shortcut
++  </message>
++  <message name="IDS_FILE_BROWSER_REMOVE_FOLDER_SHORTCUT_BUTTON_LABEL" desc="Menu item label, unpinning the selected folder from the left nav.">
++    Remove shortcut
++  </message>
++  <message name="IDS_FILE_BROWSER_SHARE_BUTTON_LABEL" desc="Menu item label, showing dialog to share the selected file.">
++    Share
++  </message>
++
++  <message name="IDS_FILE_BROWSER_COPY_FILE_NAME" desc="File Manager status message.">
++    Copying <ph name="FILE_NAME">$1<ex>movie.avi</ex></ph>...
++  </message>
++  <message name="IDS_FILE_BROWSER_COPY_ITEMS_REMAINING" desc="File Manager status message. 'Item' is used here as a generic term for file or directory.">
++    Copying $1 items...
++  </message>
++  <message name="IDS_FILE_BROWSER_COPY_TARGET_EXISTS_ERROR" desc="File Manager error message. 'Item' is used here as a generic term for file or directory.">
++    Whoops, <ph name="FILE_NAME">$1<ex>movie.avi</ex></ph> already exists. Rename it and try again.
++  </message>
++  <message name="IDS_FILE_BROWSER_COPY_SOURCE_NOT_FOUND_ERROR" desc="File Manager error message. 'Item' is used here as a generic term for file or directory.">
++    Whoops, <ph name="FILE_NAME">$1<ex>movie.avi</ex></ph> no longer exists.
++  </message>
++  <message name="IDS_FILE_BROWSER_COPY_FILESYSTEM_ERROR" desc="File Manager error message.">
++    Copy operation failed. <ph name="ERROR_MESSAGE">$1<ex>An error occurred (code: ABORT)</ex></ph>
++  </message>
++  <message name="IDS_FILE_BROWSER_COPY_UNEXPECTED_ERROR" desc="File Manager error message.">
++    Copy operation failed, unexpected error: $1
++  </message>
++  <message name="IDS_FILE_BROWSER_MOVE_FILE_NAME" desc="File Manager status message.">
++    Moving <ph name="FILE_NAME">$1<ex>movie.avi</ex></ph>...
++  </message>
++  <message name="IDS_FILE_BROWSER_MOVE_ITEMS_REMAINING" desc="File Manager status message. 'Item' is used here as a generic term for file or directory.">
++    Moving $1 items...
++  </message>
++  <message name="IDS_FILE_BROWSER_MOVE_TARGET_EXISTS_ERROR" desc="File Manager error message. 'Item' is used here as a generic term for file or directory.">
++    Whoops, <ph name="FILE_NAME">$1<ex>movie.avi</ex></ph> already exists. Rename it and try again.
++  </message>
++  <message name="IDS_FILE_BROWSER_MOVE_SOURCE_NOT_FOUND_ERROR" desc="File Manager error message. 'Item' is used here as a generic term for file or directory.">
++    Whoops, <ph name="FILE_NAME">$1<ex>movie.avi</ex></ph> no longer exists.
++  </message>
++  <message name="IDS_FILE_BROWSER_MOVE_FILESYSTEM_ERROR" desc="File Manager error message.">
++    Move failed. <ph name="ERROR_MESSAGE">$1<ex>An error occurred (code: ABORT)</ex></ph>
++  </message>
++  <message name="IDS_FILE_BROWSER_MOVE_UNEXPECTED_ERROR" desc="File Manager error message.">
++    Move failed, unexpected error: $1
++  </message>
++  <message name="IDS_FILE_BROWSER_ZIP_FILE_NAME" desc="File Manager status message.">
++    Zipping <ph name="FILE_NAME">$1<ex>movie.avi</ex></ph>...
++  </message>
++  <message name="IDS_FILE_BROWSER_ZIP_ITEMS_REMAINING" desc="File Manager status message. 'Item' is used here as a generic term for file or directory.">
++    Zipping $1 items...
++  </message>
++  <message name="IDS_FILE_BROWSER_ZIP_TARGET_EXISTS_ERROR" desc="File Manager error message. 'Item' is used here as a generic term for file or directory.">
++    Zipping failed, item exists: "$1"
++  </message>
++  <message name="IDS_FILE_BROWSER_ZIP_FILESYSTEM_ERROR" desc="File Manager error message.">
++    Zipping failed. <ph name="ERROR_MESSAGE">$1<ex>An error occurred (code: ABORT)</ex></ph>
++  </message>
++  <message name="IDS_FILE_BROWSER_ZIP_UNEXPECTED_ERROR" desc="File Manager error message.">
++    Zipping failed, unexpected error: $1
++  </message>
++  <message name="IDS_FILE_BROWSER_SYNC_FILE_NAME" desc="File Manager status message.">
++    Syncing <ph name="FILE_NAME">$1<ex>movie.avi</ex></ph>...
++  </message>
++  <message name="IDS_FILE_BROWSER_SYNC_DELETE_WITHOUT_PERMISSION_ERROR" desc="File Manager status message shown when the drive sync is failed because a user try to remove shared files that the user does not own.">
++    "<ph name="FILENAME">$1<ex>photo.jpg</ex></ph>" has been shared with you. You cannot delete it because you do not own it.
++  </message>
++  <message name="IDS_FILE_BROWSER_SYNC_SERVICE_UNAVAILABLE_ERROR" desc="File Manager status message shown when the drive sync is failed because Google Drive is temporary unavailable.">
++    Google Drive is not available right now. Uploading will automatically restart once Google Drive is back.
++  </message>
++  <message name="IDS_FILE_BROWSER_SYNC_MISC_ERROR" desc="File Manager status message shown when the drive sync is failed because of miscellaneous errors.">
++    Google Drive was unable to sync "<ph name="FILENAME">$1<ex>photo.jpg</ex></ph>" right now. Please try again later.
++  </message>
++  <message name="IDS_FILE_BROWSER_SHARE_ERROR" desc="File Manager error message when sharing a file or a directory on Drive fails because of internet connection problems.">
++    Sharing failed. Check your connection and try again later.
++  </message>
++  <message name="IDS_FILE_BROWSER_DELETE_FILE_NAME" desc="File Manager status message.">
++    Deleting "<ph name="FILENAME">$1<ex>photo.jpg</ex></ph>"...
++  </message>
++  <message name="IDS_FILE_BROWSER_DELETE_ITEMS_REMAINING" desc="File Manager status message. 'Item' is used here as a generic term for file or directory.">
++    Deleting <ph name="COUNT">$1<ex>10</ex></ph> items...
++  </message>
++  <message name="IDS_FILE_BROWSER_DELETE_ERROR" desc="Message informing about error while deleting an item or items.">
++    An error occured. Some items may not have been deleted.
++  </message>
++
++  <message name="IDS_FILE_BROWSER_COPY_PROGRESS_SUMMARY" desc="Summary message for multiple copying tasks above the progress bar.">
++    Copying...
++  </message>
++  <message name="IDS_FILE_BROWSER_MOVE_PROGRESS_SUMMARY" desc="Summary message for multiple moveing tasks above the progress bar.">
++    Moveing...
++  </message>
++  <message name="IDS_FILE_BROWSER_ZIP_PROGRESS_SUMMARY" desc="Summary message for multiple zipping tasks above the progress bar.">
++    Zipping...
++  </message>
++  <message name="IDS_FILE_BROWSER_DELETE_PROGRESS_SUMMARY" desc="Summary message for multiple deleting tasks above the progress bar.">
++    Deleting...
++  </message>
++  <message name="IDS_FILE_BROWSER_TRANSFER_PROGRESS_SUMMARY" desc="Summary message for mixed operation tasks above the progress bar. 'Transferring' is used here as a generic term for copying, moving, zipping, or deleting.">
++    Transferring...
++  </message>
++  <message name="IDS_FILE_BROWSER_SYNC_PROGRESS_SUMMARY" desc="Summary message for drive sync operation. This message can be shown without a progress bar.">
++    Syncing...
++  </message>
++  <message name="IDS_FILE_BROWSER_ERROR_PROGRESS_SUMMARY" desc="Summary message for an error above the progress bar. This message may be placed at the next to ohter *_PROGERSS_SUMMARY messages.">
++    1 error.
++  </message>
++  <message name="IDS_FILE_BROWSER_ERROR_PROGRESS_SUMMARY_PLURAL" desc="Summary message for multiple errors above the progress bar. This message may be placed at the next to ohter *_PROGERSS_SUMMARY messages.">
++    <ph name="COUNT">$1<ex>10</ex></ph> errors.
++  </message>
++
++  <message name="IDS_FILE_BROWSER_CANCEL_LABEL" desc="Cancel label.">
++    Cancel
++  </message>
++  <message name="IDS_FILE_BROWSER_OPEN_LABEL" desc="Open label.">
++    Open
++  </message>
++  <message name="IDS_FILE_BROWSER_SAVE_LABEL" desc="Save label.">
++    Save
++  </message>
++  <message name="IDS_FILE_BROWSER_OK_LABEL" desc="OK label.">
++    OK
++  </message>
++  <message name="IDS_FILE_BROWSER_UPLOAD_LABEL" desc="Upload label.">
++    Upload
++  </message>
++  <message name="IDS_FILE_BROWSER_SEARCH_TEXT_LABEL" desc="Search text field label.">
++    Search
++  </message>
++
++  <message name="IDS_FILE_BROWSER_DEFAULT_NEW_FOLDER_NAME" desc="The default name for a newly created folder.">
++    New Folder
++  </message>
++
++ <message name="IDS_FILE_BROWSER_CONFIRM_DELETE_ONE" desc="Asks the user if they are sure they want to delete a single file.">
++   Are you sure you want to delete "$1"?
++ </message>
++ <message name="IDS_FILE_BROWSER_CONFIRM_DELETE_SOME" desc="Asks the user if they are sure they want to delete multiple files/directories.">
++   Are you sure you want to delete $1 items?
++ </message>
++
++  <message name="IDS_FILE_BROWSER_UNKNOWN_FILESYSTEM_WARNING" desc="Displayed when device contents cannot be read because filesystem is unknown.">
++    This device cannot be opened because its filesystem was not recognized.
++  </message>
++  <message name="IDS_FILE_BROWSER_UNSUPPORTED_FILESYSTEM_WARNING" desc="Displayed when device contents cannot be read because filesystem is unsupported.">
++    This device cannot be opened because its filesystem is not supported.
++  </message>
++  <message name="IDS_FILE_BROWSER_FORMATTING_WARNING" desc="Displayed when you attempt to format device.">
++    Formatting the removable media is going to erase all data. Do you wish to continue?
++  </message>
++
++  <message name="IDS_FILE_BROWSER_SUGGEST_DIALOG_TITLE" desc="Title of the suggest app dialog, which shows the list of the apps which supports the selected file.">
++    Select an app to open this file
++  </message>
++  <message name="IDS_FILE_BROWSER_SUGGEST_DIALOG_LINK_TO_WEBSTORE" desc="Text of the link to the app list on Chrome Webstore, which shows the more apps than in the suggest app dialog.">
++    See more...
++  </message>
++  <message name="IDS_FILE_BROWSER_SUGGEST_DIALOG_INSTALLATION_FAILED" desc="Error message when the installation of the app from WebStore is failed.">
++    Installation failed.
++  </message>
++  <message name="IDS_FILE_BROWSER_SUGGEST_DIALOG_MESSAGE_FOR_EXECUTABLE" desc="Information message in the suggest app dialog. It is shown when Files.app is suggesting an altanative application from Chrome WebStore becauase the user is trying to open an executable file which doesn't support on ChromeOS.">
++    It looks like you're trying to run a classic application. Please try one of these newer web-based apps as an alternative.
++  </message>
++
++  <message name="IDS_FILE_BROWSER_SELECT_FOLDER_TITLE" desc="Select folder title.">
++    Select a folder to open
++  </message>
++  <message name="IDS_FILE_BROWSER_SELECT_UPLOAD_FOLDER_TITLE" desc="Select folder title for upload.">
++    Select a folder to upload
++  </message>
++  <message name="IDS_FILE_BROWSER_SELECT_OPEN_FILE_TITLE" desc="Select open file title.">
++    Select a file to open
++  </message>
++  <message name="IDS_FILE_BROWSER_SELECT_OPEN_MULTI_FILE_TITLE" desc="Select open multi file title.">
++    Select one or more files
++  </message>
++  <message name="IDS_FILE_BROWSER_SELECT_SAVEAS_FILE_TITLE" desc="Select saveas file title.">
++    Save file as
++  </message>
++
++  <message name="IDS_FILE_BROWSER_MANY_FILES_SELECTED" desc="Many files selected.">
++    <ph name="SELCTED_FILE_COUNT">$1<ex>13</ex></ph> files selected
++  </message>
++  <message name="IDS_FILE_BROWSER_MANY_DIRECTORIES_SELECTED" desc="Many directories selected.">
++    <ph name="SELCTED_FOLDERS_COUNT">$1<ex>2</ex></ph> folders selected
++  </message>
++  <message name="IDS_FILE_BROWSER_MANY_ENTRIES_SELECTED" desc="Many items (both files and directories) selected.">
++    <ph name="SELCTED_FILES_COUNT">$1<ex>21</ex></ph> items selected
++  </message>
++  <message name="IDS_FILE_BROWSER_CALCULATING_SIZE" desc="Message informing the user that total items size is being calculated.">
++    Calculating size
++  </message>
++  <message name="IDS_FILE_BROWSER_OFFLINE_HEADER" desc="Message informing the user that the browser is offline.">
++    You are offline
++  </message>
++  <message name="IDS_FILE_BROWSER_OFFLINE_MESSAGE" desc="Message informing the user how to make the selected file available offline.">
++    To save this file for offline use, get back online and&lt;br&gt;select the <ph name="OFFLINE_CHECKBOX_NAME">'$1'<ex>'Available offline'</ex></ph> checkbox for this file.
++  </message>
++  <message name="IDS_FILE_BROWSER_OFFLINE_MESSAGE_PLURAL" desc="Message informing the user how to make multiple selected files available offline.">
++    To save these files for offline use, get back online and&lt;br&gt;select the <ph name="OFFLINE_CHECKBOX_NAME">'$1'<ex>'Available offline'</ex></ph> checkbox for these files.
++  </message>
++  <message name="IDS_FILE_BROWSER_HOSTED_OFFLINE_MESSAGE" desc="Message informing the user that the selected file is only available online.">
++    You must be online to access this file.
++  </message>
++  <message name="IDS_FILE_BROWSER_HOSTED_OFFLINE_MESSAGE_PLURAL" desc="Message informing the user that the selected files are only available online.">
++    You must be online to access these files.
++  </message>
++  <message name="IDS_FILE_BROWSER_CONFIRM_MOBILE_DATA_USE" desc="Message informing the user that opening the file from Google Drive will use mobile data.">
++    Fetching this file will use approximately <ph name="FILE_SIZE">$1<ex>44 MB</ex></ph> of mobile data.
++  </message>
++  <message name="IDS_FILE_BROWSER_CONFIRM_MOBILE_DATA_USE_PLURAL" desc="Message informing the user that opening several files from Google Drive will use mobile data.">
++    Fetching these files will use approximately <ph name="FILE_SIZE">$1<ex>44 MB</ex></ph> of mobile data.
++  </message>
++  <message name="IDS_FILE_BROWSER_OPEN_IN_OTHER_DESKTOP_MESSAGE" desc="Message of an alert dialog that is shown when a user opens a file in a desktop of another profile but the file is opened in the original desktop.">
++    This file opened on a different desktop. Move to <ph name="USER_NAME">$1<ex>John Doe</ex></ph> (<ph name="MAIL_ADDRESS">$2<ex>xxxxxx@gmail.com</ex></ph>) to view it.
++  </message>
++  <message name="IDS_FILE_BROWSER_OPEN_IN_OTHER_DESKTOP_MESSAGE_PLURAL" desc="Prural verson of the message of an alert dialog that is shown when a user opens a file in a desktop of another profile but the file is opened in the original desktop.">
++    These files opened on a different desktop. Move to <ph name="USER_NAME">$1<ex>John Doe</ex></ph> (<ph name="MAIL_ADDRESS">$2<ex>xxxxxx@gmail.com</ex></ph>) to view it.
++  </message>
++  <message name="IDS_FILE_BROWSER_MULTI_PROFILE_SHARE_DIALOG_TITLE" desc="Title of a dialog to request drive share for files that come from other profiles during file transfering.">
++    This Drive file isn't shared yet
++  </message>
++  <message name="IDS_FILE_BROWSER_MULTI_PROFILE_SHARE_DIALOG_TITLE_PLURAL" desc="Title of a dialog to request drive share for files that come from other profiles during file transfering.">
++    These Drive files aren't shared yet
++  </message>
++  <message name="IDS_FILE_BROWSER_MULTI_PROFILE_SHARE_DIALOG_MESSAGE" desc="Message of a dialog to request drive share for files that come from other profiles during file transfering. Below the message, there are the e-mail address of the account to be shared with the file, and a drop down list to select a share type.">
++    Change how this file is shared.
++  </message>
++  <message name="IDS_FILE_BROWSER_MULTI_PROFILE_SHARE_DIALOG_MESSAGE_PLURAL" desc="Message of a dialog to request drive share for files that come from other profiles during file transfering. Below the message, there are the e-mail address of the account to be shared with the file, and a drop down list to select a share type.">
++    Change how these files are shared.
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_SHARE_TYPE_CAN_EDIT" desc="Label text of 'Can edit' share type. Please use the same string with Google Drive.">
++    Can edit
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_SHARE_TYPE_CAN_COMMENT" desc="Label text of 'Can comment' share type. Please use the same string with Google Drive.">
++    Can comment
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_SHARE_TYPE_CAN_VIEW" desc="Label text of 'Can view' share type. Please use the same string with Google Drive.">
++    Can view
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_MOBILE_CONNECTION_OPTION" desc="Option that determines if we will allow Google Drive content sync over mobile connections.">
++    Do not use mobile data for sync
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_SHOW_HOSTED_FILES_OPTION" desc="Option that determines if we will show hosted Google Docs files in file browser.">
++    Show Google Docs files
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_MENU_HELP" desc="In the Google Drive settings menu, name of the Help item.">
++    Help
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_BUY_MORE_SPACE" desc="Menu item, offering user to buy more space on Google Drive">
++    Buy more storage...
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_VISIT_DRIVE_GOOGLE_COM" desc="Menu item, redirecting user to drive.google.com">
++    Go to drive.google.com...
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_SPACE_AVAILABLE_LONG" desc="Text showing space left on Google Drive">
++    Google Drive space left: <ph name="SPACE_AVAILABLE">$1<ex>400 MB</ex></ph>.
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_BUY_MORE_SPACE_LINK" desc="Text on the link, offering user to buy more space on Google Drive">
++    Buy more storage
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_OUT_OF_SPACE_HEADER" desc="Message informing the user that there is not enough space to make the selected file(s) available offline.">
++    You have run out of space
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_SERVER_OUT_OF_SPACE_HEADER" desc="Message informing the user that there is not enough space on server side to store a new file.">
++    You have run out of space in Google Drive
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_LOADING" desc="Message informing the user that we are loading content of Google Drive.">
++    Hang with us. We’re fetching your files.
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_CANNOT_REACH" desc="Message informing the user that Google Drive can not be reached at this moment.">
++    Google Drive cannot be reached at this time.
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_LEARN_MORE" desc="In the Loading Google Drive page and in the Welcome to Google Drive banner, a text on the Learn More link.">
++    Learn more
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_OUT_OF_SPACE_MESSAGE" desc="Message informing the user how to make more space available to save the selected file offline.">
++    To save "<ph name="FILE_NAME">$1<ex>document.pdf</ex></ph>" offline you must free up an additional <ph name="TOTAL_FILE_SIZE">$2<ex>3.3 MB</ex></ph> of space:<ph name="MARKUP_1">&lt;br&gt;<ex>&lt;br&gt;</ex></ph>
++    <ph name="MARKUP_2">&lt;ul&gt;&lt;li&gt;<ex>&lt;ul&gt;&lt;li&gt;</ex></ph>unpin files that you no longer need to access offline<ph name="MARKUP_3">&lt;/li&gt;<ex>>&lt;/li&gt;</ex></ph>
++    <ph name="MARKUP_4">&lt;li&gt;<ex>&lt;li&gt;</ex></ph>delete files from your Downloads folder<ph name="MARKUP_5">&lt;/li&gt;&lt;/ul&gt;<ex>&lt;/li&gt;&lt;/ul&gt;</ex></ph>
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_SERVER_OUT_OF_SPACE_MESSAGE" desc="Message informing the user how to make more space available on Google Drive server side.">
++    You do not have enough space in Google Drive to save "<ph name="FILE_NAME">$1<ex>document.pdf</ex></ph>". Please remove files or <ph name="BEGIN_LINK">&lt;a target='_blank' href='$2'&gt;</ph>buy more storage space<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph>.
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_NOT_REACHED" desc="Message informing that Drive is unreachable and encuraging user to log out from the device and log back in.">
++    Google Drive could not be reached. Please <ph name="BEGIN_LINK">&lt;a href="javascript://"&gt;<ex>&lt;a href="javascript://"&gt;</ex></ph>log out<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph> and log back in.
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_WELCOME_TITLE" desc="In the Welcome to Google Drive banner, title of banner.">
++    Welcome to Google Drive!
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_WELCOME_TITLE_ALTERNATIVE" desc="In the Welcome to Google Drive banner, title of the alternative banner offering 100GB free storage.">
++    Get 100 GB free with Google Drive
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_WELCOME_TITLE_ALTERNATIVE_1TB" desc="In the Welcome to Google Drive banner, title of the alternative banner offering 1TB free storage.">
++    Get 1 TB free with Google Drive
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_WELCOME_TEXT_SHORT" desc="In the Welcome to Google Drive banner, text of the welcome message, short version.">
++    All files saved in this folder are backed up online automatically
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_WELCOME_TEXT_LONG" desc="In the Welcome to Google Drive banner, text of the welcome message, long version.">
++    <ph name="MARKUP_1">&lt;p&gt;&lt;strong&gt;<ex>&lt;strong&gt;</ex></ph>Access files from everywhere, even offline.<ph name="MARKUP_2">&lt;/strong&gt;<ex>&lt;/strong&gt;</ex></ph>
++    Files in Google Drive are up-to-date and available from any device.<ph name="MARKUP_3">&lt;/p&gt;<ex>&lt;/p&gt;</ex></ph>
++    <ph name="MARKUP_4">&lt;p&gt;&lt;strong&gt;<ex>&lt;strong&gt;</ex></ph>Keep your files safe.<ph name="MARKUP_5">&lt;/strong&gt;<ex>&lt;/strong&gt;</ex></ph>
++    No matter what happens to your device, your files are safely stored in Google Drive.<ph name="MARKUP_6">&lt;/p&gt;<ex>&lt;/p&gt;</ex></ph>
++    <ph name="MARKUP_7">&lt;p&gt;&lt;strong&gt;<ex>&lt;strong&gt;</ex></ph>Share, create and collaborate<ph name="MARKUP_8">&lt;/strong&gt;<ex>&lt;/strong&gt;</ex></ph>
++    on files with others all in one place.<ph name="MARKUP_9">&lt;/p&gt;<ex>&lt;/p&gt;</ex></ph>
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_WELCOME_CHECK_ELIGIBILITY" desc="In the Welcome to Google Drive banner, a text on the button to check promo eligibility.">
++    Check eligibility
++  </message>
++  <message name="IDS_FILE_BROWSER_DRIVE_WELCOME_DISMISS" desc="In the Welcome to Google Drive banner, a text on the button to dismiss the banner.">
++    Dismiss
++  </message>
++  <message name="IDS_FILE_BROWSER_NO_ACTION_FOR_FILE" desc="Message shown when user tries to open file, which we can't handle.">
++    This file type is not supported. Please visit the <ph name="BEGIN_LINK">&lt;a target='_blank' href='$1'&gt;<ex>&lt;a target='_blank' href='$1'&gt;</ex></ph>Chrome Web Store<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph> to find an app that can open this type of file.
++    <ph name="BEGIN_LINK_HELP">&lt;a target='_blank' href='$2'&gt;<ex>&lt;a target='_blank' href='$2'&gt;</ex></ph>Learn More<ph name="END_LINK_HELP">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph>
++  </message>
++  <message name="IDS_FILE_BROWSER_NO_ACTION_FOR_EXECUTABLE" desc="Message shown when user tries to open a windows executable file, which we can't handle.">
++    This file type is not supported. Please visit the <ph name="BEGIN_LINK">&lt;a target='_blank' href='$1'&gt;<ex>&lt;a target='_blank' href='$1'&gt;</ex></ph>Chrome Web Store<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph> to find a similar app.
++    <ph name="BEGIN_LINK_HELP">&lt;a target='_blank' href='$2'&gt;<ex>&lt;a target='_blank' href='$2'&gt;</ex></ph>Learn More<ph name="END_LINK_HELP">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph>
++  </message>
++  <message name="IDS_FILE_BROWSER_NO_ACTION_FOR_CRX_TITLE" desc="Message shown when a user tries to open a *.crx file, which we don't handle in Files.app.">
++    Wait just a sec
++  </message>
++  <message name="IDS_FILE_BROWSER_NO_ACTION_FOR_CRX" desc="Message shown when a user tries to open a *.crx file, which we don't handle in Files.app.">
++    We're constantly looking for ways to make your browsing safer. Previously, any website could prompt you to add an extension into your browser. In the latest versions of Google Chrome, you must explicitly tell Chrome that you want to install these extensions by adding them through the Extensions page. <ph name="BEGIN_LINK">&lt;a target='_blank' href='https://support.google.com/chrome_webstore/answer/2664769?p=crx_warning&amp;rd=1'&gt;</ph>Lean more<ph name="END_LINK">&lt;/a&gt;</ph>
++  </message>
++
++  <message name="IDS_FILE_BROWSER_FOLDER" desc="Folder entry type">
++    Folder
++  </message>
++  <message name="IDS_FILE_BROWSER_GENERIC_FILE_TYPE" desc="An entry type for a file with an extension that the File Manager does not recognize.">
++    <ph name="FILE_TYPE">$1<ex>ABC</ex></ph> file
++  </message>
++  <message name="IDS_FILE_BROWSER_NO_EXTENSION_FILE_TYPE" desc="An entry type for a file without an extension">
++    File
++  </message>
++  <message name="IDS_FILE_BROWSER_IMAGE_FILE_TYPE" desc="Image file type">
++    $1 image
++  </message>
++  <message name="IDS_FILE_BROWSER_VIDEO_FILE_TYPE" desc="Video file type">
++    $1 video
++  </message>
++  <message name="IDS_FILE_BROWSER_AUDIO_FILE_TYPE" desc="Audio file type">
++    $1 audio
++  </message>
++  <message name="IDS_FILE_BROWSER_HTML_DOCUMENT_FILE_TYPE" desc="HTML document file type">
++    HTML document
++  </message>
++  <message name="IDS_FILE_BROWSER_ZIP_ARCHIVE_FILE_TYPE" desc="Zip archive file type">
++    Zip archive
++  </message>
++  <message name="IDS_FILE_BROWSER_RAR_ARCHIVE_FILE_TYPE" desc="RAR archive file type">
++    RAR archive
++  </message>
++  <message name="IDS_FILE_BROWSER_TAR_ARCHIVE_FILE_TYPE" desc="Tar archive file type">
++    Tar archive
++  </message>
++  <message name="IDS_FILE_BROWSER_TAR_BZIP2_ARCHIVE_FILE_TYPE" desc="Bzip2 compressed tar archive file type">
++    Bzip2 compressed tar archive
++  </message>
++  <message name="IDS_FILE_BROWSER_TAR_GZIP_ARCHIVE_FILE_TYPE" desc="Gzip compressed tar archive file type">
++    Gzip compressed tar archive
++  </message>
++  <message name="IDS_FILE_BROWSER_PLAIN_TEXT_FILE_TYPE" desc="Plain text file type">
++    Plain text
++  </message>
++  <message name="IDS_FILE_BROWSER_PDF_DOCUMENT_FILE_TYPE" desc="PDF document file type">
++    PDF document
++  </message>
++  <message name="IDS_FILE_BROWSER_WORD_DOCUMENT_FILE_TYPE" desc="Word document file type">
++    Word document
++  </message>
++  <message name="IDS_FILE_BROWSER_POWERPOINT_PRESENTATION_FILE_TYPE" desc="PowerPoint presentation file type">
++    PowerPoint presentation
++  </message>
++  <message name="IDS_FILE_BROWSER_EXCEL_FILE_TYPE" desc="Excel spreadsheet file type">
++    Excel spreadsheet
++  </message>
++
++  <message name="IDS_FILE_BROWSER_GDOC_DOCUMENT_FILE_TYPE" desc="Google document file type">
++    Google document
++  </message>
++  <message name="IDS_FILE_BROWSER_GSHEET_DOCUMENT_FILE_TYPE" desc="Google spreadsheet file type">
++    Google spreadsheet
++  </message>
++  <message name="IDS_FILE_BROWSER_GSLIDES_DOCUMENT_FILE_TYPE" desc="Google presentation file type">
++    Google presentation
++  </message>
++  <message name="IDS_FILE_BROWSER_GDRAW_DOCUMENT_FILE_TYPE" desc="Google drawing file type">
++    Google drawing
++  </message>
++  <message name="IDS_FILE_BROWSER_GTABLE_DOCUMENT_FILE_TYPE" desc="Google table file type">
++    Google table
++  </message>
++  <message name="IDS_FILE_BROWSER_GFORM_DOCUMENT_FILE_TYPE" desc="Google form file type">
++    Google form
++  </message>
++  <message name="IDS_FILE_BROWSER_GLINK_DOCUMENT_FILE_TYPE" desc="Google Drive link file type">
++    Google Drive link
++  </message>
++
++  <message name="IDS_FILE_BROWSER_ERROR_VIEWING_FILE_TITLE" desc="Title of error message propmt when user attempts to open a non-supported file in file browser.">
++    <ph name="FILENAME">$1</ph>
++  </message>
++  <message name="IDS_FILE_BROWSER_ERROR_VIEWING_FILE" desc="Error message when user attempts to open a non-supported file in the Files app via Downloads panel.">
++    This file type is not supported. Please visit the Chrome Web Store to find an app that can open this type of file.
++  </message>
++  <message name="IDS_FILE_BROWSER_ERROR_UNRESOLVABLE_FILE" desc="Error message when the file attempted to open from Downloads panel was not found under paths managed by file manager.">
++    This file has wandered off somewhere. Please check your download location setting and try again.
++  </message>
++  <message name="IDS_FILE_BROWSER_AUDIO_PLAYER_TITLE" desc="Title of the Audio Player window.">
++    Audio Player
++  </message>
++  <message name="IDS_FILE_BROWSER_AUDIO_PLAYER_DEFAULT_ARTIST" desc="In the Audio Player window, default artist name used when artist name is unknown.">
++    Unknown Artist
++  </message>
++
++  <message name="IDS_FILE_BROWSER_FILE_ERROR_GENERIC" desc="In the File Manager, the error message when the file operation failed.">
++    An error occurred.
++  </message>
++  <message name="IDS_FILE_BROWSER_FILE_ERROR_NOT_FOUND" desc="In the File Manager, the error message when the file could not be found.">
++    The file could not be found.
++  </message>
++  <message name="IDS_FILE_BROWSER_FILE_ERROR_SECURITY" desc="In the File Manager, the error message when the file could not be accessed for security reasons.">
++    The file could not be accessed for security reasons.
++  </message>
++  <message name="IDS_FILE_BROWSER_FILE_ERROR_NOT_READABLE" desc="In the File Manager, the error message when the file could not be read.">
++    The file could not be read.
++  </message>
++  <message name="IDS_FILE_BROWSER_FILE_ERROR_NO_MODIFICATION_ALLOWED" desc="In the File Manager, the error message when the file could not be modified.">
++    The file could not be modified.
++  </message>
++  <message name="IDS_FILE_BROWSER_FILE_ERROR_INVALID_STATE" desc="In the File Manager, the error message when the file is not usable.">
++    The file or the directory is not usable.
++  </message>
++  <message name="IDS_FILE_BROWSER_FILE_ERROR_INVALID_MODIFICATION" desc="In the File Manager, the error message when the file could not be modified.">
++    The file could not be modified.
++  </message>
++  <message name="IDS_FILE_BROWSER_FILE_ERROR_PATH_EXISTS" desc="In the File Manager, the error message when the a file or a directory with the same name already exists.">
++    A file or a directory with the same name already exists.
++  </message>
++  <message name="IDS_FILE_BROWSER_FILE_ERROR_QUOTA_EXCEEDED" desc="In the File Manager, the error message when there is not enough space to complete the operation.">
++    There is not enough space.
++  </message>
++
++  <message name="IDS_FILE_BROWSER_SEARCH_DRIVE_HTML" desc="In the File Manager, the item in the autocomplete suggestion item just under the search box, to continue searching in the list.">
++    '&lt;b&gt;<ph name="SEARCH_STRING">$1<ex>abc</ex></ph>&lt;/b&gt;' - &lt;em&gt;search Drive&lt;/em&gt;
++  </message>
++  <message name="IDS_FILE_BROWSER_SEARCH_NO_MATCHING_FILES_HTML" desc="In the File Manager, the message informing the user that the search did not match any files or directories.">
++    No items match &lt;b&gt;"<ph name="SEARCH_STRING">$1<ex>abc</ex></ph>"&lt;/b&gt;
++  </message>
++
++  <message name="IDS_FILE_BROWSER_CHANGE_DEFAULT_MENU_ITEM" desc="In the File Manager, the text in the menu item to change the default action for a particular file type.">
++    Change default...
++  </message>
++  <message name="IDS_FILE_BROWSER_CHANGE_DEFAULT_CAPTION" desc="In the File Manager, the caption on the dialog box that chooses the default action for a particular file type.">
++    Choose the default app for <ph name="FILE_TYPE">$1<ex>PNG</ex></ph> files:
++  </message>
++  <message name="IDS_FILE_BROWSER_DEFAULT_ACTION_LABEL" desc="In the File Manager actions menu, the text next to the default action name.">
++    (default)
++  </message>
++
++  <message name="IDS_FILE_BROWSER_VIEW_TYPE_LABEL" desc="In File Manager, the label for the button menu to switch view types (e.g., list view or thumbnail view)">
++    View
++  </message>
++  <message name="IDS_FILE_BROWSER_DETAIL_VIEW_TOOLTIP" desc="Tooltip for the List View button.">
++    List view
++  </message>
++  <message name="IDS_FILE_BROWSER_THUMBNAIL_VIEW_TOOLTIP" desc="Tooltip for the Thumbnail View button.">
++    Thumbnail view
++  </message>
++  <message name="IDS_FILE_BROWSER_GEAR_BUTTON_TOOLTIP" desc="Tooltip for the gear button in Files.app.">
++    Settings
++  </message>
++
++  <message name="IDS_FILE_BROWSER_TIME_TODAY" desc="File date and time in case the date is today.">
++    Today <ph name="TODAY_DAYTIME">$1<ex>6:19 AM</ex></ph>
++  </message>
++  <message name="IDS_FILE_BROWSER_TIME_YESTERDAY" desc="File date and time in case the date is yesterday.">
++    Yesterday <ph name="YESTERDAY_DAYTIME">$1<ex>4:48 PM</ex></ph>
++  </message>
++
++  <message name="IDS_FILE_BROWSER_ALL_FILES_FILTER" desc="All Files filter for Open/Save dialog">
++    All files
++  </message>
++
++  <message name="IDS_FILE_BROWSER_SPACE_AVAILABLE" desc="Menu item showing space left for storage.">
++    <ph name="SPACE_AVAILABLE">$1<ex>4.8 GB</ex></ph> left
++  </message>
++  <message name="IDS_FILE_BROWSER_WAITING_FOR_SPACE_INFO" desc="Menu item, saying that FileBrowser is waiting for space information for storage. When actual data arrives, this item will be replaced with IDS_FILE_BROWSER_SPACE_AVAILABLE">
++    Waiting for space info...
++  </message>
++  <message name="IDS_FILE_BROWSER_FAILED_SPACE_INFO" desc="Menu item, saying that FileBrowser is failed to retrieve space information.">
++    Failed to retrieve space info
++  </message>
++
+   </messages>
+   </release>
+ </grit>
+diff --git a/chrome/browser/browser_resources.grd b/chrome/browser/browser_resources.grd
+index 1debfb8..f4ef442 100644
+--- a/chrome/browser/browser_resources.grd
++++ b/chrome/browser/browser_resources.grd
+@@ -334,10 +334,11 @@
+         <include name="IDR_SLOW_JS" file="resources\chromeos\slow.js" type="BINDATA" />
+         <include name="IDR_CHARGER_REPLACEMENT_HTML" file="resources\chromeos\charger_replacement.html" flattenhtml="true" type="BINDATA" />
+       </if>
+-      <if expr="chromeos">
++      
++<!--  <if expr="chromeos"> -->
+         <include name="IDR_FILEMANAGER_MANIFEST" file="resources\file_manager\manifest.json" type="BINDATA" />
+         <include name="IDR_VIDEOPLAYER_MANIFEST" file="resources\video_player\manifest.json" type="BINDATA" />
+-      </if>
++<!--  </if> -->
+       <if expr="image_loader_extension">
+         <include name="IDR_IMAGE_LOADER_MANIFEST" file="resources\image_loader\manifest.json" type="BINDATA" />
+       </if>
+diff --git a/chrome/browser/extensions/component_loader.cc b/chrome/browser/extensions/component_loader.cc
+index 39da625..a47b970 100644
+--- a/chrome/browser/extensions/component_loader.cc
++++ b/chrome/browser/extensions/component_loader.cc
+@@ -272,7 +272,7 @@ bool ComponentLoader::Exists(const std::string& id) const {
+ }
+ 
+ void ComponentLoader::AddFileManagerExtension() {
+-#if defined(OS_CHROMEOS)
++//#if defined(OS_CHROMEOS)
+ #ifndef NDEBUG
+   const CommandLine* command_line = CommandLine::ForCurrentProcess();
+   if (command_line->HasSwitch(switches::kFileManagerExtensionPath)) {
+@@ -282,9 +282,10 @@ void ComponentLoader::AddFileManagerExtension() {
+     return;
+   }
+ #endif  // NDEBUG
++  fprintf(stdout, "ComponentLoader::%s\n", __func__);
+   Add(IDR_FILEMANAGER_MANIFEST,
+       base::FilePath(FILE_PATH_LITERAL("file_manager")));
+-#endif  // defined(OS_CHROMEOS)
++//#endif  // defined(OS_CHROMEOS)
+ }
+ 
+ void ComponentLoader::AddVideoPlayerExtension() {
+diff --git a/chrome/browser/extensions/extension_view_host_factory.cc b/chrome/browser/extensions/extension_view_host_factory.cc
+index 2b92644..de359a5 100644
+--- a/chrome/browser/extensions/extension_view_host_factory.cc
++++ b/chrome/browser/extensions/extension_view_host_factory.cc
+@@ -94,13 +94,15 @@ ExtensionViewHost* CreateViewHost(const GURL& url,
+                                   Profile* profile,
+                                   Browser* browser,
+                                   extensions::ViewType view_type) {
++  fprintf(stdout, "CreateViewHost\n");
+   DCHECK(profile);
+   // A NULL browser may only be given for dialogs.
+   DCHECK(browser || view_type == VIEW_TYPE_EXTENSION_DIALOG);
+-
+   const Extension* extension = GetExtensionForUrl(profile, url);
+-  if (!extension)
++  if (!extension) {
++	fprintf(stdout, "extension is null\n");
+     return NULL;
++  }
+   if (profile->IsOffTheRecord()) {
+     return CreateViewHostForIncognito(
+         extension, url, profile, browser, view_type);
+@@ -132,6 +134,7 @@ ExtensionViewHost* ExtensionViewHostFactory::CreateInfobarHost(
+ ExtensionViewHost* ExtensionViewHostFactory::CreateDialogHost(
+     const GURL& url,
+     Profile* profile) {
++  fprintf(stdout, "ExtensionViewHostFactory::CreateDialogHost\n");
+   DCHECK(profile);
+   return CreateViewHost(url, profile, NULL, VIEW_TYPE_EXTENSION_DIALOG);
+ }
+diff --git a/chrome/browser/file_manager/app_id.h b/chrome/browser/file_manager/app_id.h
+new file mode 100644
+index 0000000..47a6542
+--- /dev/null
++++ b/chrome/browser/file_manager/app_id.h
+@@ -0,0 +1,21 @@
++// Copyright 2013 The Chromium Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#ifndef CHROME_BROWSER_FILE_MANAGER_APP_ID_H_
++#define CHROME_BROWSER_FILE_MANAGER_APP_ID_H_
++
++namespace file_manager {
++
++// The file manager's app ID.
++//
++// Note that file_manager::kFileManagerAppId is a bit redundant but a shorter
++// name like kAppId would be cryptic inside "file_manager" namespace.
++const char kFileManagerAppId[] = "hhaomjibdihmijegdhdafkllkbggdgoj";
++
++// The video player's app ID.
++const char kVideoPlayerAppId[] = "jcgeabjmjgoblfofpppfkcoakmfobdko";
++
++}  // namespace file_manager
++
++#endif  // CHROME_BROWSER_FILE_MANAGER_APP_ID_H_
+diff --git a/chrome/browser/file_manager/fileapi_util.cc b/chrome/browser/file_manager/fileapi_util.cc
+new file mode 100644
+index 0000000..e060fea
+--- /dev/null
++++ b/chrome/browser/file_manager/fileapi_util.cc
+@@ -0,0 +1,328 @@
++// Copyright 2013 The Chromium Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#include "chrome/browser/file_manager/fileapi_util.h"
++
++#include "base/files/file.h"
++#include "base/files/file_path.h"
++#include "chrome/browser/chromeos/drive/file_system_util.h"
++#include "chrome/browser/extensions/extension_util.h"
++#include "chrome/browser/profiles/profile.h"
++#include "content/public/browser/browser_thread.h"
++#include "content/public/browser/render_view_host.h"
++#include "content/public/browser/site_instance.h"
++#include "content/public/browser/storage_partition.h"
++#include "extensions/common/extension.h"
++#include "net/base/escape.h"
++#include "url/gurl.h"
++#include "webkit/browser/fileapi/file_system_context.h"
++#include "webkit/browser/fileapi/open_file_system_mode.h"
++#include "webkit/common/fileapi/file_system_util.h"
++
++using content::BrowserThread;
++
++namespace file_manager {
++namespace util {
++
++namespace {
++
++GURL ConvertRelativeFilePathToFileSystemUrl(const base::FilePath& relative_path,
++                                            const std::string& extension_id) {
++  GURL base_url = fileapi::GetFileSystemRootURI(
++      extensions::Extension::GetBaseURLFromExtensionId(extension_id),
++      fileapi::kFileSystemTypeExternal);
++  return GURL(base_url.spec() +
++              net::EscapeUrlEncodedData(relative_path.AsUTF8Unsafe(),
++                                        false));  // Space to %20 instead of +.
++}
++
++// Creates an ErrorDefinition with an error set to |error|.
++EntryDefinition CreateEntryDefinitionWithError(base::File::Error error) {
++  EntryDefinition result;
++  result.error = error;
++  return result;
++}
++
++// Helper class for performing conversions from file definitions to entry
++// definitions. It is possible to do it without a class, but the code would be
++// crazy and super tricky.
++//
++// This class copies the input |file_definition_list|,
++// so there is no need to worry about validity of passed |file_definition_list|
++// reference. Also, it automatically deletes itself after converting finished,
++// or if shutdown is invoked during ResolveURL(). Must be called on UI thread.
++class FileDefinitionListConverter {
++ public:
++  FileDefinitionListConverter(Profile* profile,
++                              const std::string& extension_id,
++                              const FileDefinitionList& file_definition_list,
++                              const EntryDefinitionListCallback& callback);
++  ~FileDefinitionListConverter() {}
++
++ private:
++  // Converts the element under the iterator to an entry. First, converts
++  // the virtual path to an URL, and calls OnResolvedURL(). In case of error
++  // calls OnIteratorConverted with an error entry definition.
++  void ConvertNextIterator(scoped_ptr<FileDefinitionListConverter> self_deleter,
++                           FileDefinitionList::const_iterator iterator);
++
++  // Creates an entry definition from the URL as well as the file definition.
++  // Then, calls OnIteratorConverted with the created entry definition.
++  void OnResolvedURL(scoped_ptr<FileDefinitionListConverter> self_deleter,
++                     FileDefinitionList::const_iterator iterator,
++                     const GURL& root_url,
++                     const std::string& name,
++                     base::File::Error error);
++
++  // Called when the iterator is converted. Adds the |entry_definition| to
++  // |results_| and calls ConvertNextIterator() for the next element.
++  void OnIteratorConverted(scoped_ptr<FileDefinitionListConverter> self_deleter,
++                           FileDefinitionList::const_iterator iterator,
++                           const EntryDefinition& entry_definition);
++
++  scoped_refptr<fileapi::FileSystemContext> file_system_context_;
++  const std::string extension_id_;
++  const FileDefinitionList file_definition_list_;
++  const EntryDefinitionListCallback callback_;
++  scoped_ptr<EntryDefinitionList> result_;
++};
++
++FileDefinitionListConverter::FileDefinitionListConverter(
++    Profile* profile,
++    const std::string& extension_id,
++    const FileDefinitionList& file_definition_list,
++    const EntryDefinitionListCallback& callback)
++    : extension_id_(extension_id),
++      file_definition_list_(file_definition_list),
++      callback_(callback),
++      result_(new EntryDefinitionList) {
++  DCHECK(BrowserThread::CurrentlyOn(BrowserThread::UI));
++
++  // File browser APIs are meant to be used only from extension context, so
++  // the extension's site is the one in whose file system context the virtual
++  // path should be found.
++  GURL site = extensions::util::GetSiteForExtensionId(extension_id_, profile);
++  file_system_context_ =
++      content::BrowserContext::GetStoragePartitionForSite(
++          profile, site)->GetFileSystemContext();
++
++  // Deletes the converter, once the scoped pointer gets out of scope. It is
++  // either, if the conversion is finished, or ResolveURL() is terminated, and
++  // the callback not called because of shutdown.
++  scoped_ptr<FileDefinitionListConverter> self_deleter(this);
++  ConvertNextIterator(self_deleter.Pass(), file_definition_list_.begin());
++}
++
++void FileDefinitionListConverter::ConvertNextIterator(
++    scoped_ptr<FileDefinitionListConverter> self_deleter,
++    FileDefinitionList::const_iterator iterator) {
++  if (iterator == file_definition_list_.end()) {
++    // The converter object will be destroyed since |self_deleter| gets out of
++    // scope.
++    callback_.Run(result_.Pass());
++    return;
++  }
++
++  if (!file_system_context_.get()) {
++    OnIteratorConverted(self_deleter.Pass(),
++                        iterator,
++                        CreateEntryDefinitionWithError(
++                            base::File::FILE_ERROR_INVALID_OPERATION));
++    return;
++  }
++
++  fileapi::ExternalFileSystemBackend* backend =
++      file_system_context_->external_backend();
++  if (!backend) {
++    OnIteratorConverted(self_deleter.Pass(),
++                        iterator,
++                        CreateEntryDefinitionWithError(
++                            base::File::FILE_ERROR_INVALID_OPERATION));
++    return;
++  }
++
++  fileapi::FileSystemURL url = file_system_context_->CreateCrackedFileSystemURL(
++      extensions::Extension::GetBaseURLFromExtensionId(extension_id_),
++      fileapi::kFileSystemTypeExternal,
++      iterator->virtual_path);
++  DCHECK(url.is_valid());
++
++  // The converter object will be deleted if the callback is not called because
++  // of shutdown during ResolveURL().
++  //
++  // TODO(mtomasz, nhiroki): Call FileSystemContext::ResolveURL() directly,
++  // after removing redundant thread restrictions in there.
++  backend->ResolveURL(
++      url,
++      // Not sandboxed file systems are not creatable via ResolveURL().
++      fileapi::OPEN_FILE_SYSTEM_FAIL_IF_NONEXISTENT,
++      base::Bind(&FileDefinitionListConverter::OnResolvedURL,
++                 base::Unretained(this),
++                 base::Passed(&self_deleter),
++                 iterator));
++}
++
++void FileDefinitionListConverter::OnResolvedURL(
++    scoped_ptr<FileDefinitionListConverter> self_deleter,
++    FileDefinitionList::const_iterator iterator,
++    const GURL& root_url,
++    const std::string& name,
++    base::File::Error error) {
++  DCHECK(BrowserThread::CurrentlyOn(BrowserThread::UI));
++
++  EntryDefinition entry_definition;
++  entry_definition.file_system_root_url = root_url.spec();
++  entry_definition.file_system_name = name;
++  entry_definition.is_directory = iterator->is_directory;
++  entry_definition.error = error;
++
++  // Construct a target Entry.fullPath value from the virtual path and the
++  // root URL. Eg. Downloads/A/b.txt -> A/b.txt.
++  const base::FilePath root_virtual_path =
++      file_system_context_->CrackURL(root_url).virtual_path();
++  DCHECK(root_virtual_path == iterator->virtual_path ||
++         root_virtual_path.IsParent(iterator->virtual_path));
++  base::FilePath full_path;
++  root_virtual_path.AppendRelativePath(iterator->virtual_path, &full_path);
++  entry_definition.full_path = full_path;
++
++  OnIteratorConverted(self_deleter.Pass(), iterator, entry_definition);
++}
++
++void FileDefinitionListConverter::OnIteratorConverted(
++    scoped_ptr<FileDefinitionListConverter> self_deleter,
++    FileDefinitionList::const_iterator iterator,
++    const EntryDefinition& entry_definition) {
++  result_->push_back(entry_definition);
++  ConvertNextIterator(self_deleter.Pass(), ++iterator);
++}
++
++// Helper function to return the converted definition entry directly, without
++// the redundant container.
++void OnConvertFileDefinitionDone(
++    const EntryDefinitionCallback& callback,
++    scoped_ptr<EntryDefinitionList> entry_definition_list) {
++  DCHECK_EQ(1u, entry_definition_list->size());
++  callback.Run(entry_definition_list->at(0));
++}
++
++}  // namespace
++
++EntryDefinition::EntryDefinition() {
++}
++
++EntryDefinition::~EntryDefinition() {
++}
++
++fileapi::FileSystemContext* GetFileSystemContextForExtensionId(
++    Profile* profile,
++    const std::string& extension_id) {
++  GURL site = extensions::util::GetSiteForExtensionId(extension_id, profile);
++  return content::BrowserContext::GetStoragePartitionForSite(profile, site)->
++      GetFileSystemContext();
++}
++
++fileapi::FileSystemContext* GetFileSystemContextForRenderViewHost(
++    Profile* profile,
++    content::RenderViewHost* render_view_host) {
++  content::SiteInstance* site_instance = render_view_host->GetSiteInstance();
++  return content::BrowserContext::GetStoragePartition(profile, site_instance)->
++      GetFileSystemContext();
++}
++
++base::FilePath ConvertDrivePathToRelativeFileSystemPath(
++    Profile* profile,
++    const std::string& extension_id,
++    const base::FilePath& drive_path) {
++  // "/special/drive-xxx"
++  base::FilePath path = drive::util::GetDriveMountPointPath(profile);
++  // appended with (|drive_path| - "drive").
++  drive::util::GetDriveGrandRootPath().AppendRelativePath(drive_path, &path);
++
++  base::FilePath relative_path;
++  ConvertAbsoluteFilePathToRelativeFileSystemPath(profile,
++                                                  extension_id,
++                                                  path,
++                                                  &relative_path);
++  return relative_path;
++}
++
++GURL ConvertDrivePathToFileSystemUrl(Profile* profile,
++                                     const base::FilePath& drive_path,
++                                     const std::string& extension_id) {
++  const base::FilePath relative_path =
++      ConvertDrivePathToRelativeFileSystemPath(profile, extension_id,
++                                               drive_path);
++  if (relative_path.empty())
++    return GURL();
++  return ConvertRelativeFilePathToFileSystemUrl(relative_path, extension_id);
++}
++
++bool ConvertAbsoluteFilePathToFileSystemUrl(Profile* profile,
++                                            const base::FilePath& absolute_path,
++                                            const std::string& extension_id,
++                                            GURL* url) {
++  base::FilePath relative_path;
++  if (!ConvertAbsoluteFilePathToRelativeFileSystemPath(profile,
++                                                       extension_id,
++                                                       absolute_path,
++                                                       &relative_path)) {
++    return false;
++  }
++  *url = ConvertRelativeFilePathToFileSystemUrl(relative_path, extension_id);
++  return true;
++}
++
++bool ConvertAbsoluteFilePathToRelativeFileSystemPath(
++    Profile* profile,
++    const std::string& extension_id,
++    const base::FilePath& absolute_path,
++    base::FilePath* virtual_path) {
++  // File browser APIs are meant to be used only from extension context, so the
++  // extension's site is the one in whose file system context the virtual path
++  // should be found.
++  GURL site = extensions::util::GetSiteForExtensionId(extension_id, profile);
++  fileapi::ExternalFileSystemBackend* backend =
++      content::BrowserContext::GetStoragePartitionForSite(profile, site)->
++          GetFileSystemContext()->external_backend();
++  if (!backend)
++    return false;
++
++  // Find if this file path is managed by the external backend.
++  if (!backend->GetVirtualPath(absolute_path, virtual_path))
++    return false;
++
++  return true;
++}
++
++void ConvertFileDefinitionListToEntryDefinitionList(
++    Profile* profile,
++    const std::string& extension_id,
++    const FileDefinitionList& file_definition_list,
++    const EntryDefinitionListCallback& callback) {
++  DCHECK(BrowserThread::CurrentlyOn(BrowserThread::UI));
++
++  // The converter object destroys itself.
++  new FileDefinitionListConverter(
++      profile, extension_id, file_definition_list, callback);
++}
++
++void ConvertFileDefinitionToEntryDefinition(
++    Profile* profile,
++    const std::string& extension_id,
++    const FileDefinition& file_definition,
++    const EntryDefinitionCallback& callback) {
++  DCHECK(BrowserThread::CurrentlyOn(BrowserThread::UI));
++
++  FileDefinitionList file_definition_list;
++  file_definition_list.push_back(file_definition);
++  ConvertFileDefinitionListToEntryDefinitionList(
++      profile,
++      extension_id,
++      file_definition_list,
++      base::Bind(&OnConvertFileDefinitionDone, callback));
++}
++
++}  // namespace util
++}  // namespace file_manager
+diff --git a/chrome/browser/file_manager/fileapi_util.h b/chrome/browser/file_manager/fileapi_util.h
+new file mode 100644
+index 0000000..9051063
+--- /dev/null
++++ b/chrome/browser/file_manager/fileapi_util.h
+@@ -0,0 +1,128 @@
++// Copyright 2013 The Chromium Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++//
++// This file provides File API related utilities.
++
++#ifndef CHROME_BROWSER_FILE_MANAGER_FILEAPI_UTIL_H_
++#define CHROME_BROWSER_FILE_MANAGER_FILEAPI_UTIL_H_
++
++#include <string>
++
++#include "base/callback_forward.h"
++#include "base/files/file.h"
++#include "base/files/file_path.h"
++#include "url/gurl.h"
++
++class Profile;
++
++namespace content {
++class RenderViewHost;
++}
++
++namespace fileapi {
++class FileSystemContext;
++}
++
++namespace file_manager {
++namespace util {
++
++// Structure information necessary to create a EntryDefinition, and therefore
++// an Entry object on the JavaScript side.
++struct FileDefinition {
++  base::FilePath virtual_path;
++  base::FilePath absolute_path;
++  bool is_directory;
++};
++
++// Contains all information needed to create an Entry object in custom bindings.
++struct EntryDefinition {
++  EntryDefinition();
++  ~EntryDefinition();
++
++  std::string file_system_root_url;  // Used to create DOMFileSystem.
++  std::string file_system_name;      // Value of DOMFileSystem.name.
++  base::FilePath full_path;    // Value of Entry.fullPath.
++  bool is_directory;           // Whether to create FileEntry or DirectoryEntry.
++  base::File::Error error;
++};
++
++typedef std::vector<FileDefinition> FileDefinitionList;
++typedef std::vector<EntryDefinition> EntryDefinitionList;
++
++// The callback used by ConvertFileDefinitionToEntryDefinition. Returns the
++// result of the conversion.
++typedef base::Callback<void(const EntryDefinition& entry_definition)>
++    EntryDefinitionCallback;
++
++// The callback used by ConvertFileDefinitionListToEntryDefinitionList. Returns
++// the result of the conversion as a list.
++typedef base::Callback<void(scoped_ptr<
++    EntryDefinitionList> entry_definition_list)> EntryDefinitionListCallback;
++
++// Returns a file system context associated with the given profile and the
++// extension ID.
++fileapi::FileSystemContext* GetFileSystemContextForExtensionId(
++    Profile* profile,
++    const std::string& extension_id);
++
++// Returns a file system context associated with the given profile and the
++// render view host.
++fileapi::FileSystemContext* GetFileSystemContextForRenderViewHost(
++    Profile* profile,
++    content::RenderViewHost* render_view_host);
++
++// Converts DrivePath (e.g., "drive/root", which always starts with the fixed
++// "drive" directory) to a RelativeFileSystemPathrelative (e.g.,
++// "drive-xxx/root/foo". which starts from the "mount point" in the FileSystem
++// API that may be distinguished for each profile by the appended "xxx" part.)
++base::FilePath ConvertDrivePathToRelativeFileSystemPath(
++    Profile* profile,
++    const std::string& extension_id,
++    const base::FilePath& drive_path);
++
++// Converts DrivePath to FileSystem URL.
++// E.g., "drive/root" to filesystem://id/external/drive-xxx/root.
++GURL ConvertDrivePathToFileSystemUrl(Profile* profile,
++                                     const base::FilePath& drive_path,
++                                     const std::string& extension_id);
++
++// Converts AbsolutePath (e.g., "/special/drive-xxx/root" or
++// "/home/chronos/u-xxx/Downloads") into filesystem URL. Returns false
++// if |absolute_path| is not managed by the external filesystem provider.
++bool ConvertAbsoluteFilePathToFileSystemUrl(Profile* profile,
++                                            const base::FilePath& absolute_path,
++                                            const std::string& extension_id,
++                                            GURL* url);
++
++// Converts AbsolutePath into RelativeFileSystemPath (e.g.,
++// "/special/drive-xxx/root/foo" => "drive-xxx/root/foo".) Returns false if
++// |absolute_path| is not managed by the external filesystem provider.
++bool ConvertAbsoluteFilePathToRelativeFileSystemPath(
++    Profile* profile,
++    const std::string& extension_id,
++    const base::FilePath& absolute_path,
++    base::FilePath* relative_path);
++
++// Converts a file definition to a entry definition and returns the result
++// via a callback. |profile| cannot be null. Must be called on UI thread.
++void ConvertFileDefinitionToEntryDefinition(
++    Profile* profile,
++    const std::string& extension_id,
++    const FileDefinition& file_definition,
++    const EntryDefinitionCallback& callback);
++
++// Converts a list of file definitions into a list of entry definitions and
++// returns it via |callback|. The method is safe, |file_definition_list| is
++// copied internally. The output list has the same order of items and size as
++// the input vector. |profile| cannot be null. Must be called on UI thread.
++void ConvertFileDefinitionListToEntryDefinitionList(
++    Profile* profile,
++    const std::string& extension_id,
++    const FileDefinitionList& file_definition_list,
++    const EntryDefinitionListCallback& callback);
++
++}  // namespace util
++}  // namespace file_manager
++
++#endif  // CHROME_BROWSER_FILE_MANAGER_FILEAPI_UTIL_H_
+diff --git a/chrome/browser/file_manager/select_file_dialog_util.cc b/chrome/browser/file_manager/select_file_dialog_util.cc
+new file mode 100644
+index 0000000..192517f
+--- /dev/null
++++ b/chrome/browser/file_manager/select_file_dialog_util.cc
+@@ -0,0 +1,54 @@
++// Copyright 2013 The Chromium Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#include "chrome/browser/file_manager/select_file_dialog_util.h"
++
++#include "grit/generated_resources.h"
++#include "ui/base/l10n/l10n_util.h"
++
++namespace file_manager {
++namespace util {
++
++base::string16 GetSelectFileDialogTitle(
++    ui::SelectFileDialog::Type dialog_type) {
++  base::string16 title;
++  switch (dialog_type) {
++    case ui::SelectFileDialog::SELECT_NONE:
++      // Full page file manager doesn't need a title.
++      break;
++
++    case ui::SelectFileDialog::SELECT_FOLDER:
++      title = l10n_util::GetStringUTF16(
++          IDS_FILE_BROWSER_SELECT_FOLDER_TITLE);
++      break;
++
++    case ui::SelectFileDialog::SELECT_UPLOAD_FOLDER:
++      title = l10n_util::GetStringUTF16(
++          IDS_FILE_BROWSER_SELECT_UPLOAD_FOLDER_TITLE);
++      break;
++
++    case ui::SelectFileDialog::SELECT_SAVEAS_FILE:
++      title = l10n_util::GetStringUTF16(
++          IDS_FILE_BROWSER_SELECT_SAVEAS_FILE_TITLE);
++      break;
++
++    case ui::SelectFileDialog::SELECT_OPEN_FILE:
++      title = l10n_util::GetStringUTF16(
++          IDS_FILE_BROWSER_SELECT_OPEN_FILE_TITLE);
++      break;
++
++    case ui::SelectFileDialog::SELECT_OPEN_MULTI_FILE:
++      title = l10n_util::GetStringUTF16(
++          IDS_FILE_BROWSER_SELECT_OPEN_MULTI_FILE_TITLE);
++      break;
++
++    default:
++      NOTREACHED();
++  }
++
++  return title;
++}
++
++}  // namespace util
++}  // namespace file_manager
+diff --git a/chrome/browser/file_manager/select_file_dialog_util.h b/chrome/browser/file_manager/select_file_dialog_util.h
+new file mode 100644
+index 0000000..9aff9a3
+--- /dev/null
++++ b/chrome/browser/file_manager/select_file_dialog_util.h
+@@ -0,0 +1,21 @@
++// Copyright 2013 The Chromium Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++//
++// This file provides utilities related to the select file dialog.
++
++#ifndef CHROME_BROWSER_FILE_MANAGER_SELECT_FILE_DIALOG_UTIL_H_
++#define CHROME_BROWSER_FILE_MANAGER_SELECT_FILE_DIALOG_UTIL_H_
++
++#include "ui/shell_dialogs/select_file_dialog.h"
++
++namespace file_manager {
++namespace util {
++
++// Get file dialog title string from its type.
++base::string16 GetSelectFileDialogTitle(ui::SelectFileDialog::Type type);
++
++}  // namespace util
++}  // namespace file_manager
++
++#endif  // CHROME_BROWSER_FILE_MANAGER_SELECT_FILE_DIALOG_UTIL_H_
+diff --git a/chrome/browser/file_manager/url_util.cc b/chrome/browser/file_manager/url_util.cc
+new file mode 100644
+index 0000000..1e176d2
+--- /dev/null
++++ b/chrome/browser/file_manager/url_util.cc
+@@ -0,0 +1,130 @@
++// Copyright (c) 2012 The Chromium Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#include "chrome/browser/file_manager/url_util.h"
++
++#include "base/json/json_writer.h"
++#include "base/values.h"
++#include "chrome/browser/file_manager/app_id.h"
++#include "net/base/escape.h"
++
++namespace file_manager {
++namespace util {
++namespace {
++
++// Returns a file manager URL for the given |path|.
++GURL GetFileManagerUrl(const char* path) {
++  return GURL(std::string("chrome-extension://") + kFileManagerAppId + path);
++}
++
++// Converts a numeric dialog type to a string.
++std::string GetDialogTypeAsString(
++    ui::SelectFileDialog::Type dialog_type) {
++  std::string type_str;
++  switch (dialog_type) {
++    case ui::SelectFileDialog::SELECT_NONE:
++      type_str = "full-page";
++      break;
++
++    case ui::SelectFileDialog::SELECT_FOLDER:
++      type_str = "folder";
++      break;
++
++    case ui::SelectFileDialog::SELECT_UPLOAD_FOLDER:
++      type_str = "upload-folder";
++      break;
++
++    case ui::SelectFileDialog::SELECT_SAVEAS_FILE:
++      type_str = "saveas-file";
++      break;
++
++    case ui::SelectFileDialog::SELECT_OPEN_FILE:
++      type_str = "open-file";
++      break;
++
++    case ui::SelectFileDialog::SELECT_OPEN_MULTI_FILE:
++      type_str = "open-multi-file";
++      break;
++
++    default:
++      NOTREACHED();
++  }
++
++  return type_str;
++}
++
++}  // namespace
++
++GURL GetFileManagerBaseUrl() {
++  return GetFileManagerUrl("/");
++}
++
++GURL GetFileManagerMainPageUrl() {
++  return GetFileManagerUrl("/main.html");
++}
++
++GURL GetFileManagerMainPageUrlWithParams(
++    ui::SelectFileDialog::Type type,
++    const base::string16& title,
++    const GURL& current_directory_url,
++    const GURL& selection_url,
++    const std::string& target_name,
++    const ui::SelectFileDialog::FileTypeInfo* file_types,
++    int file_type_index,
++    const base::FilePath::StringType& default_extension) {
++  base::DictionaryValue arg_value;
++  arg_value.SetString("type", GetDialogTypeAsString(type));
++  arg_value.SetString("title", title);
++  arg_value.SetString("currentDirectoryURL", current_directory_url.spec());
++  arg_value.SetString("selectionURL", selection_url.spec());
++  arg_value.SetString("targetName", target_name);
++  arg_value.SetString("defaultExtension", default_extension);
++
++  if (file_types) {
++    base::ListValue* types_list = new base::ListValue();
++    for (size_t i = 0; i < file_types->extensions.size(); ++i) {
++      base::ListValue* extensions_list = new base::ListValue();
++      for (size_t j = 0; j < file_types->extensions[i].size(); ++j) {
++        extensions_list->Append(
++            new base::StringValue(file_types->extensions[i][j]));
++      }
++
++      base::DictionaryValue* dict = new base::DictionaryValue();
++      dict->Set("extensions", extensions_list);
++
++      if (i < file_types->extension_description_overrides.size()) {
++        base::string16 desc = file_types->extension_description_overrides[i];
++        dict->SetString("description", desc);
++      }
++
++      // file_type_index is 1-based. 0 means no selection at all.
++      dict->SetBoolean("selected",
++                       (static_cast<size_t>(file_type_index) == (i + 1)));
++
++      types_list->Set(i, dict);
++    }
++    arg_value.Set("typeList", types_list);
++
++    arg_value.SetBoolean("includeAllFiles", file_types->include_all_files);
++  }
++
++  // If the caller cannot handle Drive path, the file chooser dialog need to
++  // return resolved local native paths to the selected files.
++  arg_value.SetBoolean("shouldReturnLocalPath",
++                       !file_types || !file_types->support_drive);
++
++  std::string json_args;
++  base::JSONWriter::Write(&arg_value, &json_args);
++
++  std::string url = GetFileManagerMainPageUrl().spec() + '?' +
++      net::EscapeUrlEncodedData(json_args,
++                                false);  // Space to %20 instead of +.
++
++  fprintf(stdout, "%s\n", __func__);
++  fprintf(stdout, "  url=%s\n", url.c_str());
++  return GURL(url);
++}
++
++}  // namespace util
++}  // namespace file_manager
+diff --git a/chrome/browser/file_manager/url_util.h b/chrome/browser/file_manager/url_util.h
+new file mode 100644
+index 0000000..9f39195
+--- /dev/null
++++ b/chrome/browser/file_manager/url_util.h
+@@ -0,0 +1,41 @@
++// Copyright 2013 The Chromium Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++//
++// This file provides URL-related utilities.
++
++#ifndef CHROME_BROWSER_FILE_MANAGER_URL_UTIL_H_
++#define CHROME_BROWSER_FILE_MANAGER_URL_UTIL_H_
++
++#include <string>
++
++#include "base/strings/string16.h"
++#include "ui/shell_dialogs/select_file_dialog.h"
++#include "url/gurl.h"
++
++namespace file_manager {
++namespace util {
++
++// Returns the file manager's base URL, which just looks like
++// chrome-extension://<app-id>/.
++GURL GetFileManagerBaseUrl();
++
++// Returns the file manager's main page URL.
++GURL GetFileManagerMainPageUrl();
++
++// Returns the file manager's main page URL with parameters encoded as JSON
++// in the query string section. |file_types| is optional.
++GURL GetFileManagerMainPageUrlWithParams(
++    ui::SelectFileDialog::Type type,
++    const base::string16& title,
++    const GURL& current_directory_url,
++    const GURL& selection_url,
++    const std::string& target_name,
++    const ui::SelectFileDialog::FileTypeInfo* file_types,
++    int file_type_index,
++    const base::FilePath::StringType& default_extension);
++
++}  // namespace util
++}  // namespace file_manager
++
++#endif  // CHROME_BROWSER_FILE_MANAGER_URL_UTIL_H_
+diff --git a/chrome/browser/resources/component_extension_resources.grd b/chrome/browser/resources/component_extension_resources.grd
+index 2cf0e0d..e34ae23 100644
+--- a/chrome/browser/resources/component_extension_resources.grd
++++ b/chrome/browser/resources/component_extension_resources.grd
+@@ -65,7 +65,7 @@
+       <include name="IDR_FEEDBACK_FEEDBACK_CSS" file="feedback/css/feedback.css" type="BINDATA" />
+       <include name="IDR_FEEDBACK_ICON_32" file="feedback/images/icon32.png" type="BINDATA" />
+       <include name="IDR_FEEDBACK_ICON_64" file="feedback/images/icon64.png" type="BINDATA" />
+-      <if expr="chromeos">
++<!--  <if expr="chromeos"> -->
+         <!-- App pages and scripts. -->
+         <include name="IDR_FILE_MANAGER_MAIN" file="file_manager/main.html" flattenhtml="true" allowexternalscript="true" type="BINDATA" />
+         <include name="IDR_FILE_MANAGER_MAIN_JS" file="file_manager/foreground/js/main_scripts.js" flattenhtml="true" type="BINDATA" />
+@@ -140,7 +140,7 @@
+         <include name="IDR_FILE_MANAGER_IMG_GALLERY_2X_CURSOR_NWSE" file="file_manager/foreground/images/gallery/2x/cursor_nwse.png" type="BINDATA" />
+         <include name="IDR_FILE_MANAGER_IMG_GALLERY_2X_CURSOR_SWNE" file="file_manager/foreground/images/gallery/2x/cursor_swne.png" type="BINDATA" />
+         <include name="IDR_FILE_MANAGER_IMG_GALLERY_2X_CURSOR_UPDOWN" file="file_manager/foreground/images/gallery/2x/cursor_updown.png" type="BINDATA" />
+-      </if>
++<!--    </if>  -->
+       <if expr="image_loader_extension">
+         <include name="IDR_IMAGE_LOADER_IMAGE_LOADER_JS" file="image_loader/image_loader.js" type="BINDATA" />
+         <include name="IDR_IMAGE_LOADER_CACHE_JS" file="image_loader/cache.js" type="BINDATA" />
+diff --git a/chrome/browser/ui/aura/chrome_browser_main_extra_parts_aura.cc b/chrome/browser/ui/aura/chrome_browser_main_extra_parts_aura.cc
+index dba4955..9064324 100644
+--- a/chrome/browser/ui/aura/chrome_browser_main_extra_parts_aura.cc
++++ b/chrome/browser/ui/aura/chrome_browser_main_extra_parts_aura.cc
+@@ -19,8 +19,9 @@
+ #include "ui/views/widget/native_widget_aura.h"
+ 
+ #if defined(OS_LINUX)
+-#include "chrome/browser/ui/libgtk2ui/gtk2_ui.h"
+ #include "ui/views/linux_ui/linux_ui.h"
++#include "chrome/browser/ui/views/select_file_dialog_extension.h"
++#include "chrome/browser/ui/views/select_file_dialog_extension_factory.h"
+ #else
+ #endif
+ 
+@@ -97,6 +98,9 @@ void ChromeBrowserMainExtraPartsAura::PreProfileInit() {
+   // Now that we have some minimal ui initialized, check to see if we're
+   // running as root and bail if we are.
+   DetectRunningAsRoot();
++
++  fprintf(stdout, "ChromeBrowserMainExtraPartsAura::%s\n", __func__);
++  ui::SelectFileDialog::SetFactory(new SelectFileDialogExtensionFactory);
+ #endif
+ }
+ 
+diff --git a/chrome/browser/ui/views/extensions/extension_dialog.cc b/chrome/browser/ui/views/extensions/extension_dialog.cc
+index 1d8aec9..9b4d0f3 100644
+--- a/chrome/browser/ui/views/extensions/extension_dialog.cc
++++ b/chrome/browser/ui/views/extensions/extension_dialog.cc
+@@ -56,10 +56,13 @@ ExtensionDialog* ExtensionDialog::Show(
+     int min_height,
+     const base::string16& title,
+     ExtensionDialogObserver* observer) {
++  fprintf(stdout, "ExtensionDialog:::%s\n", __func__);
+   extensions::ExtensionViewHost* host =
+       extensions::ExtensionViewHostFactory::CreateDialogHost(url, profile);
+-  if (!host)
++  if (!host) {
++    fprintf(stdout, " host is null\n");
+     return NULL;
++  }
+   // Preferred size must be set before views::Widget::CreateWindowWithParent
+   // is called because CreateWindowWithParent refers the result of CanResize().
+   host->view()->SetPreferredSize(gfx::Size(width, height));
+diff --git a/chrome/browser/ui/views/select_file_dialog_extension.cc b/chrome/browser/ui/views/select_file_dialog_extension.cc
+index 8da4a2c..37f9e82 100644
+--- a/chrome/browser/ui/views/select_file_dialog_extension.cc
++++ b/chrome/browser/ui/views/select_file_dialog_extension.cc
+@@ -14,11 +14,10 @@
+ #include "base/memory/singleton.h"
+ #include "base/message_loop/message_loop.h"
+ #include "chrome/browser/app_mode/app_mode_utils.h"
+-#include "chrome/browser/chromeos/file_manager/app_id.h"
+-#include "chrome/browser/chromeos/file_manager/fileapi_util.h"
+-#include "chrome/browser/chromeos/file_manager/select_file_dialog_util.h"
+-#include "chrome/browser/chromeos/file_manager/url_util.h"
+-#include "chrome/browser/chromeos/login/login_web_dialog.h"
++#include "chrome/browser/file_manager/app_id.h"
++#include "chrome/browser/file_manager/fileapi_util.h"
++#include "chrome/browser/file_manager/select_file_dialog_util.h"
++#include "chrome/browser/file_manager/url_util.h"
+ #include "chrome/browser/extensions/extension_service.h"
+ #include "chrome/browser/extensions/extension_view_host.h"
+ #include "chrome/browser/profiles/profile.h"
+@@ -38,6 +37,10 @@
+ #include "ui/shell_dialogs/selected_file_info.h"
+ #include "ui/views/widget/widget.h"
+ 
++#if defined(OS_CHROMEOS)
++#include "chrome/browser/chromeos/login/login_web_dialog.h"
++#endif
++
+ using apps::AppWindow;
+ using content::BrowserThread;
+ 
+@@ -140,8 +143,10 @@ void FindRuntimeContext(
+   // In ChromeOS kiosk launch mode, we can still show file picker for
+   // certificate manager dialog. There are no browser or webapp window
+   // instances present in this case.
++#if defined(OS_CHROMEOS)
+   if (chrome::IsRunningInForcedAppMode() && !(*web_contents))
+     *web_contents = chromeos::LoginWebDialog::GetCurrentWebContents();
++#endif
+ 
+   CHECK(web_contents);
+   *profile = Profile::FromBrowserContext((*web_contents)->GetBrowserContext());
+diff --git a/chrome/browser/ui/views/select_file_dialog_extension_factory.cc b/chrome/browser/ui/views/select_file_dialog_extension_factory.cc
+index 265eb52..37e1d69 100644
+--- a/chrome/browser/ui/views/select_file_dialog_extension_factory.cc
++++ b/chrome/browser/ui/views/select_file_dialog_extension_factory.cc
+@@ -7,6 +7,7 @@
+ #include "chrome/browser/ui/views/select_file_dialog_extension.h"
+ 
+ SelectFileDialogExtensionFactory::SelectFileDialogExtensionFactory() {
++  fprintf(stdout, "SelectFileDialogExtensionFactory::%s\n", __func__);
+ }
+ 
+ SelectFileDialogExtensionFactory::~SelectFileDialogExtensionFactory() {
+@@ -15,5 +16,6 @@ SelectFileDialogExtensionFactory::~SelectFileDialogExtensionFactory() {
+ ui::SelectFileDialog* SelectFileDialogExtensionFactory::Create(
+     ui::SelectFileDialog::Listener* listener,
+     ui::SelectFilePolicy* policy) {
++	fprintf(stdout, "SelectFileDialogExtensionFactory::%s\n", __func__);
+   return SelectFileDialogExtension::Create(listener, policy);
+ }
+diff --git a/chrome/chrome_browser_ui.gypi b/chrome/chrome_browser_ui.gypi
+index 5f00d32..2a9082f 100644
+--- a/chrome/chrome_browser_ui.gypi
++++ b/chrome/chrome_browser_ui.gypi
+@@ -72,6 +72,13 @@
+       'sources': [
+         # All .cc, .h, .m, and .mm files under browser/ui except for:
+         # * tests and mocks.
++        'browser/file_manager/app_id.h',
++        'browser/file_manager/select_file_dialog_util.cc',
++        'browser/file_manager/select_file_dialog_util.h',
++        'browser/file_manager/fileapi_util.cc',
++        'browser/file_manager/fileapi_util.h',
++        'browser/file_manager/url_util.cc',
++        'browser/file_manager/url_util.h',
+         'browser/ui/accelerator_utils.h',
+         'browser/ui/android/android_about_app_info.cc',
+         'browser/ui/android/android_about_app_info.h',
+@@ -3364,8 +3371,8 @@
+             }],
+           ],
+         }],
+-        # On chromeos, file manager extension handles the file open/save dialog.
+-        ['chromeos==1', {
++        # On chromeos and ozone_wayland, file manager extension handles the file open/save dialog.
++        ['chromeos==1 or use_ozone ==1', {
+           'sources/': [
+             ['include', '^browser/ui/views/select_file_dialog_extension.cc'],
+             ['include', '^browser/ui/views/select_file_dialog_extension.h'],
+diff --git a/ui/shell_dialogs/select_file_dialog.cc b/ui/shell_dialogs/select_file_dialog.cc
+index 7897bca..bbd03b9 100644
+--- a/ui/shell_dialogs/select_file_dialog.cc
++++ b/ui/shell_dialogs/select_file_dialog.cc
+@@ -110,7 +110,7 @@ void SelectFileDialog::SelectFile(
+     gfx::NativeWindow owning_window,
+     void* params) {
+   DCHECK(listener_);
+-
++  fprintf(stdout, "SelectFileDialog::%s\n", __func__);
+   if (select_file_policy_.get() &&
+       !select_file_policy_->CanOpenSelectFileDialog()) {
+     select_file_policy_->SelectFileDenied();
+-- 
+1.7.9.5
+
