@@ -54,6 +54,17 @@ void WaylandTouchscreen::OnTouchDown(void *data,
   WaylandTouchscreen* device = static_cast<WaylandTouchscreen*>(data);
   WaylandDisplay::GetInstance()->SetSerial(serial);
   WaylandInputDevice* input = WaylandDisplay::GetInstance()->PrimaryInput();
+
+  if (!input->GetPointer()) {
+    if (!surface) {
+      input->SetFocusWindowHandle(0);
+      return;
+    }
+    WaylandWindow* window =
+          static_cast<WaylandWindow*>(wl_surface_get_user_data(surface));
+    input->SetFocusWindowHandle(window->Handle());
+  }
+
   if (input->GetFocusWindowHandle() && input->GetGrabButton() == 0)
     input->SetGrabWindowHandle(input->GetFocusWindowHandle(), id);
 
@@ -80,6 +91,9 @@ void WaylandTouchscreen::OnTouchUp(void *data,
 
   if (input->GetGrabWindowHandle() && input->GetGrabButton() == id)
     input->SetGrabWindowHandle(0, 0);
+
+  if (!input->GetPointer())
+      input->SetFocusWindowHandle(0);
 }
 
 void WaylandTouchscreen::OnTouchMotion(void *data,
